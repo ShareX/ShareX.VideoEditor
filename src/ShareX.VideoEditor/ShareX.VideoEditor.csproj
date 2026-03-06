@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Platforms>x64;ARM64</Platforms>
+    <RootNamespace>ShareX.VideoEditor</RootNamespace>
+    <AssemblyName>ShareX.VideoEditor</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Avalonia -->
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+    <PackageReference Include="FluentAvaloniaUI" Version="2.4.1" />
+
+    <!-- MVVM -->
+    <PackageReference Include="ReactiveUI" Version="22.3.1" />
+
+    <!-- Serialization -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+</Project>

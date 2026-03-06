@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- VideoEditor manages its own package versions -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

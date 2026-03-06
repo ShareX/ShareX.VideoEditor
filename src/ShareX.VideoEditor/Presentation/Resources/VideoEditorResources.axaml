@@ -1,0 +1,233 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ═══════════════════════════════════════════
+       COLOR PALETTE — Editorial Cinema Dark
+       ═══════════════════════════════════════════ -->
+
+  <Style>
+    <Style.Resources>
+      <Color x:Key="VE_ColorBase">#FF0A0A0F</Color>
+      <Color x:Key="VE_ColorSurface">#FF111118</Color>
+      <Color x:Key="VE_ColorSurfaceElevated">#FF16161F</Color>
+      <Color x:Key="VE_ColorSurfaceHover">#FF1C1C28</Color>
+      <Color x:Key="VE_ColorBorder">#FF1E1E2E</Color>
+      <Color x:Key="VE_ColorAccent">#FF00C8F0</Color>
+      <Color x:Key="VE_ColorAccentDark">#FF008AAA</Color>
+      <Color x:Key="VE_ColorAccentPressed">#FF006E8A</Color>
+      <Color x:Key="VE_ColorDanger">#FFFF4757</Color>
+      <Color x:Key="VE_ColorSuccess">#FF00D4AA</Color>
+      <Color x:Key="VE_ColorText">#FFF2F2FA</Color>
+      <Color x:Key="VE_ColorTextSecondary">#FF7A7A96</Color>
+      <Color x:Key="VE_ColorTextMuted">#FF3A3A52</Color>
+      <Color x:Key="VE_ColorTimelineTrack">#FF0D0D16</Color>
+      <Color x:Key="VE_ColorTrimRegion">#3000C8F0</Color>
+      <Color x:Key="VE_ColorPlayhead">#FFFF4757</Color>
+
+      <SolidColorBrush x:Key="VE_Base" Color="{StaticResource VE_ColorBase}" />
+      <SolidColorBrush x:Key="VE_Surface" Color="{StaticResource VE_ColorSurface}" />
+      <SolidColorBrush x:Key="VE_SurfaceElevated" Color="{StaticResource VE_ColorSurfaceElevated}" />
+      <SolidColorBrush x:Key="VE_SurfaceHover" Color="{StaticResource VE_ColorSurfaceHover}" />
+      <SolidColorBrush x:Key="VE_Border" Color="{StaticResource VE_ColorBorder}" />
+      <SolidColorBrush x:Key="VE_Accent" Color="{StaticResource VE_ColorAccent}" />
+      <SolidColorBrush x:Key="VE_AccentDark" Color="{StaticResource VE_ColorAccentDark}" />
+      <SolidColorBrush x:Key="VE_AccentPressed" Color="{StaticResource VE_ColorAccentPressed}" />
+      <SolidColorBrush x:Key="VE_Danger" Color="{StaticResource VE_ColorDanger}" />
+      <SolidColorBrush x:Key="VE_Success" Color="{StaticResource VE_ColorSuccess}" />
+      <SolidColorBrush x:Key="VE_Text" Color="{StaticResource VE_ColorText}" />
+      <SolidColorBrush x:Key="VE_TextSecondary" Color="{StaticResource VE_ColorTextSecondary}" />
+      <SolidColorBrush x:Key="VE_TextMuted" Color="{StaticResource VE_ColorTextMuted}" />
+      <SolidColorBrush x:Key="VE_TimelineTrack" Color="{StaticResource VE_ColorTimelineTrack}" />
+      <SolidColorBrush x:Key="VE_TrimRegion" Color="{StaticResource VE_ColorTrimRegion}" />
+      <SolidColorBrush x:Key="VE_Playhead" Color="{StaticResource VE_ColorPlayhead}" />
+
+      <!-- Spacing tokens -->
+      <x:Double x:Key="VE_Spacing2">2</x:Double>
+      <x:Double x:Key="VE_Spacing4">4</x:Double>
+      <x:Double x:Key="VE_Spacing8">8</x:Double>
+      <x:Double x:Key="VE_Spacing12">12</x:Double>
+      <x:Double x:Key="VE_Spacing16">16</x:Double>
+      <x:Double x:Key="VE_Spacing24">24</x:Double>
+      <x:Double x:Key="VE_Spacing32">32</x:Double>
+
+      <!-- Padding tokens -->
+      <Thickness x:Key="VE_PaddingXS">4</Thickness>
+      <Thickness x:Key="VE_PaddingSM">8</Thickness>
+      <Thickness x:Key="VE_PaddingMD">12 8</Thickness>
+      <Thickness x:Key="VE_PaddingLG">16 12</Thickness>
+
+      <!-- Corner radius tokens -->
+      <CornerRadius x:Key="VE_RadiusXS">2</CornerRadius>
+      <CornerRadius x:Key="VE_RadiusSM">4</CornerRadius>
+      <CornerRadius x:Key="VE_RadiusMD">8</CornerRadius>
+      <CornerRadius x:Key="VE_RadiusLG">12</CornerRadius>
+
+      <!-- Font size tokens -->
+      <x:Double x:Key="VE_FontXS">10</x:Double>
+      <x:Double x:Key="VE_FontSM">12</x:Double>
+      <x:Double x:Key="VE_FontMD">13</x:Double>
+      <x:Double x:Key="VE_FontLG">15</x:Double>
+      <x:Double x:Key="VE_FontXL">18</x:Double>
+      <x:Double x:Key="VE_FontDisplay">24</x:Double>
+
+      <!-- Font families -->
+      <FontFamily x:Key="VE_FontUI">Inter,Segoe UI,system-ui,sans-serif</FontFamily>
+      <FontFamily x:Key="VE_FontMono">Cascadia Mono,Fira Code,Consolas,monospace</FontFamily>
+    </Style.Resources>
+  </Style>
+
+  <!-- ═══════════════════════════════════════════
+       TEXT BLOCK STYLES (class-based)
+       ═══════════════════════════════════════════ -->
+
+  <Style Selector="TextBlock.ve-label">
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontSM}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{StaticResource VE_TextSecondary}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="TextBlock.ve-body">
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontMD}" />
+    <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
+  </Style>
+
+  <Style Selector="TextBlock.ve-timecode">
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontMono}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontMD}" />
+    <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <Style Selector="TextBlock.ve-section-header">
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontXS}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource VE_TextSecondary}" />
+    <Setter Property="LetterSpacing" Value="1" />
+  </Style>
+
+  <!-- ═══════════════════════════════════════════
+       BUTTON STYLES (class-based)
+       ═══════════════════════════════════════════ -->
+
+  <Style Selector="Button.ve-primary">
+    <Setter Property="Background" Value="{StaticResource VE_Accent}" />
+    <Setter Property="Foreground" Value="{StaticResource VE_Base}" />
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontMD}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="{StaticResource VE_PaddingLG}" />
+    <Setter Property="CornerRadius" Value="{StaticResource VE_RadiusSM}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.ve-primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_AccentDark}" />
+  </Style>
+  <Style Selector="Button.ve-primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_AccentPressed}" />
+  </Style>
+  <Style Selector="Button.ve-primary:disabled">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <Style Selector="Button.ve-ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource VE_TextSecondary}" />
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontMD}" />
+    <Setter Property="Padding" Value="{StaticResource VE_PaddingSM}" />
+    <Setter Property="CornerRadius" Value="{StaticResource VE_RadiusSM}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.ve-ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
+  </Style>
+  <Style Selector="Button.ve-ghost:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
+  </Style>
+  <Style Selector="Button.ve-ghost:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_Border}" />
+  </Style>
+
+  <Style Selector="Button.ve-transport">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.ve-transport:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
+  </Style>
+  <Style Selector="Button.ve-transport:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_Border}" />
+  </Style>
+  <Style Selector="Button.ve-transport:disabled">
+    <Setter Property="Opacity" Value="0.38" />
+  </Style>
+
+  <Style Selector="Button.ve-play">
+    <Setter Property="Background" Value="{StaticResource VE_Accent}" />
+    <Setter Property="Foreground" Value="{StaticResource VE_Base}" />
+    <Setter Property="Width" Value="48" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.ve-play:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_AccentDark}" />
+  </Style>
+  <Style Selector="Button.ve-play:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_AccentPressed}" />
+  </Style>
+
+  <Style Selector="Button.ve-tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource VE_TextSecondary}" />
+    <Setter Property="FontFamily" Value="{StaticResource VE_FontUI}" />
+    <Setter Property="FontSize" Value="{StaticResource VE_FontSM}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Padding" Value="12 8" />
+    <Setter Property="CornerRadius" Value="{StaticResource VE_RadiusSM}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.ve-tab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
+  </Style>
+  <Style Selector="Button.ve-tab:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
+  </Style>
+
+  <!-- ═══════════════════════════════════════════
+       SLIDER
+       ═══════════════════════════════════════════ -->
+  <Style Selector="Slider.ve-slider">
+    <Setter Property="Foreground" Value="{StaticResource VE_Accent}" />
+    <Setter Property="Background" Value="{StaticResource VE_Border}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <!-- ═══════════════════════════════════════════
+       BORDER HELPERS
+       ═══════════════════════════════════════════ -->
+  <Style Selector="Border.ve-separator">
+    <Setter Property="Background" Value="{StaticResource VE_Border}" />
+    <Setter Property="Height" Value="1" />
+  </Style>
+  <Style Selector="Border.ve-vseparator">
+    <Setter Property="Background" Value="{StaticResource VE_Border}" />
+    <Setter Property="Width" Value="1" />
+  </Style>
+
+</Styles>
