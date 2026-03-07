@@ -56,10 +56,24 @@ public static class VideoEditorHost
         if (string.IsNullOrWhiteSpace(options.VideoPath))
             throw new ArgumentException("VideoEditorOptions.VideoPath must be set.", nameof(options));
 
-        if (events?.DiagnosticReported != null)
-            VideoEditorServices.Diagnostics = new DelegateVideoEditorDiagnosticsSink(events.DiagnosticReported);
+        VideoEditorServices.Diagnostics = events?.DiagnosticReported != null
+            ? new DelegateVideoEditorDiagnosticsSink(events.DiagnosticReported)
+            : null;
 
-        var thread = new Thread(() => new VideoEditorSession(options, events).Run())
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                new VideoEditorSession(options, events).Run();
+            }
+            catch (Exception ex)
+            {
+                VideoEditorServices.ReportError(nameof(VideoEditorHost), "Video editor session failed to start.", ex);
+
+                try { events?.ExportFailed?.Invoke(ex); } catch { }
+                try { events?.EditorClosed?.Invoke(); } catch { }
+            }
+        })
         {
             IsBackground = true,
             Name = "ShareX.VideoEditor.Session"
@@ -353,21 +367,33 @@ internal sealed class VideoEditorSession
         string assemblyDir = Path.GetDirectoryName(typeof(VideoEditorHost).Assembly.Location)
             ?? AppContext.BaseDirectory;
 
-        string candidate = Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
-        if (File.Exists(candidate)) return candidate;
-
-        // Dev fallback: look for the Vite dev server output relative to the source tree
-        string? dir = assemblyDir;
-        for (int i = 0; i < 6; i++)
+        foreach (string candidate in EnumerateWebUiCandidates(assemblyDir))
         {
-            dir = Path.GetDirectoryName(dir);
-            if (dir == null) break;
-            string devPath = Path.Combine(dir, "src", "WebUI", "dist", "index.html");
-            if (File.Exists(devPath)) return devPath;
+            if (File.Exists(candidate))
+                return candidate;
         }
 
+        string defaultCandidate = Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
+
         throw new FileNotFoundException(
-            "WebUI dist not found. Run 'npm run build' inside src/WebUI first.", candidate);
+            "WebUI dist not found. Run 'npm run build' inside src/WebUI first.", defaultCandidate);
+    }
+
+    private static IEnumerable<string> EnumerateWebUiCandidates(string assemblyDir)
+    {
+        yield return Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
+
+        string? dir = assemblyDir;
+        for (int i = 0; i < 10 && dir != null; i++)
+        {
+            dir = Path.GetDirectoryName(dir);
+            if (dir == null)
+                yield break;
+
+            yield return Path.Combine(dir, "WebUI", "dist", "index.html");
+            yield return Path.Combine(dir, "src", "WebUI", "dist", "index.html");
+            yield return Path.Combine(dir, "ShareX.VideoEditor", "src", "WebUI", "dist", "index.html");
+        }
     }
 
     private static string GetExtension(string format) => format.ToUpperInvariant() switch
