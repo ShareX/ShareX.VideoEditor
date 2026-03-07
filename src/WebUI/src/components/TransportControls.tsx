@@ -1,4 +1,6 @@
+import { Play, Pause, SkipBack, SkipForward, Volume2 } from 'lucide-react'
 import { formatTime } from '../utils/time'
+import { GlassPill, PremiumIconButton } from './ui'
 
 interface TransportControlsProps {
   position: number
@@ -22,48 +24,57 @@ export default function TransportControls({
   onVolumeChange,
 }: TransportControlsProps) {
   return (
-    <div className="flex items-center h-14 px-4 bg-ve-surface border-t border-ve-border border-b border-ve-border shrink-0">
-      {/* Left: position / duration */}
-      <div className="flex items-center gap-1 flex-1">
+    <div className="flex items-center justify-between h-16 px-5 bg-ve-surface/60 backdrop-blur-md border-t border-white/[0.06] shrink-0">
+      {/* Left: timecode */}
+      <div className="flex items-center gap-1.5 min-w-[120px]">
         <span className="ve-timecode text-ve-text">{formatTime(position)}</span>
-        <span className="ve-timecode text-ve-muted"> / </span>
+        <span className="ve-timecode text-ve-muted">/</span>
         <span className="ve-timecode text-ve-secondary">{formatTime(duration)}</span>
       </div>
 
-      {/* Center: transport */}
-      <div className="flex items-center gap-2">
-        <button
+      {/* Center: transport pill */}
+      <GlassPill className="h-12 px-2 gap-1">
+        <PremiumIconButton
           onClick={onSkipBack}
-          className="w-9 h-9 rounded-lg bg-ve-elevated hover:bg-ve-border active:scale-90 transition-all flex items-center justify-center text-ve-secondary hover:text-ve-text"
+          size="md"
+          variant="ghost"
           title="Skip back 5s (←)"
           aria-label="Skip back 5 seconds"
           aria-keyshortcuts="ArrowLeft"
         >
-          ⏮
-        </button>
-        <button
+          <SkipBack className="w-4 h-4" />
+        </PremiumIconButton>
+
+        <PremiumIconButton
           onClick={onPlayPause}
-          className="w-11 h-11 rounded-full bg-ve-accent hover:bg-ve-accent-h active:scale-90 transition-all flex items-center justify-center text-white text-lg"
+          size="lg"
+          variant="accent"
           title="Play / Pause (Space)"
           aria-label={isPlaying ? 'Pause' : 'Play'}
           aria-keyshortcuts="Space"
+          className="rounded-full"
         >
-          {isPlaying ? '⏸' : '▶'}
-        </button>
-        <button
+          {isPlaying
+            ? <Pause className="w-5 h-5" fill="currentColor" />
+            : <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
+          }
+        </PremiumIconButton>
+
+        <PremiumIconButton
           onClick={onSkipForward}
-          className="w-9 h-9 rounded-lg bg-ve-elevated hover:bg-ve-border active:scale-90 transition-all flex items-center justify-center text-ve-secondary hover:text-ve-text"
+          size="md"
+          variant="ghost"
           title="Skip forward 5s (→)"
           aria-label="Skip forward 5 seconds"
           aria-keyshortcuts="ArrowRight"
         >
-          ⏭
-        </button>
-      </div>
+          <SkipForward className="w-4 h-4" />
+        </PremiumIconButton>
+      </GlassPill>
 
       {/* Right: volume */}
-      <div className="flex items-center gap-2 flex-1 justify-end">
-        <span className="text-ve-secondary text-sm">🔊</span>
+      <div className="flex items-center gap-2.5 min-w-[120px] justify-end">
+        <Volume2 className="w-4 h-4 text-ve-secondary" />
         <input
           type="range"
           min={0}

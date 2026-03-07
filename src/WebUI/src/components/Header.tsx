@@ -1,3 +1,6 @@
+import { Film, Download, AlertTriangle } from 'lucide-react'
+import { GlassPill, PremiumButton, Separator } from './ui'
+
 interface HeaderProps {
   videoPath: string
   isExporting: boolean
@@ -18,54 +21,69 @@ export default function Header({
   const fileName = videoPath ? videoPath.split('/').pop()?.split('\\').pop() ?? videoPath : ''
 
   return (
-    <header className="flex items-center gap-3 h-12 px-4 bg-ve-surface border-b border-ve-border shrink-0">
-      {/* Logo + title */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-7 h-7 rounded-md bg-ve-accent flex items-center justify-center text-xs text-ve-base font-bold">
-          ▶
+    <header className="flex items-center gap-4 h-14 px-4 bg-ve-surface/80 backdrop-blur-md border-b border-white/[0.06] shrink-0">
+      {/* Logo + title pill */}
+      <GlassPill className="h-9 px-4 gap-3">
+        <div className="w-7 h-7 rounded-lg bg-ve-accent flex items-center justify-center shadow-glow-amber-sm">
+          <Film className="w-4 h-4 text-white" strokeWidth={2.5} />
         </div>
         <span className="text-xs font-semibold tracking-widest text-ve-text uppercase">
           Video Editor
         </span>
-        <span className="w-px h-4 bg-ve-border" />
-        <span className="font-mono text-[11px] text-ve-secondary truncate max-w-xs">
-          {fileName}
-        </span>
-      </div>
+        {fileName && (
+          <>
+            <Separator />
+            <span className="font-mono text-[11px] text-ve-secondary truncate max-w-[200px]">
+              {fileName}
+            </span>
+          </>
+        )}
+      </GlassPill>
 
       {/* Center: export progress */}
-      <div className="flex items-center gap-2 flex-1 justify-center" aria-live="polite" aria-atomic="true">
+      <div className="flex items-center gap-3 flex-1 justify-center" aria-live="polite" aria-atomic="true">
         {isExporting && (
-          <>
-            <span className="text-xs text-ve-accent">{exportStatusMessage}</span>
-            <div className="w-28 h-1 bg-ve-border rounded-full overflow-hidden" role="progressbar" aria-valuenow={exportProgress} aria-valuemin={0} aria-valuemax={100}>
+          <GlassPill className="h-8 px-4 gap-3">
+            <span className="text-xs text-amber-400 font-medium">{exportStatusMessage}</span>
+            <div
+              className="w-28 h-1.5 bg-ve-border rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={exportProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
               <div
-                className="h-full bg-ve-accent ve-progress-active rounded-full transition-all duration-300"
+                className="h-full bg-ve-accent rounded-full transition-all duration-300 animate-pulse-soft"
                 style={{ width: `${exportProgress}%` }}
               />
             </div>
-          </>
+            <span className="text-[11px] font-mono text-ve-muted tracking-tighter">
+              {Math.round(exportProgress)}%
+            </span>
+          </GlassPill>
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      {/* Right actions */}
+      <div className="flex items-center gap-2.5">
         {!ffmpegAvailable && (
-          <span className="text-[11px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">
-            FFmpeg not found
-          </span>
+          <GlassPill className="h-7 px-3 gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px] text-amber-400 font-medium">FFmpeg not found</span>
+          </GlassPill>
         )}
-        <button
+        <PremiumButton
           onClick={onExport}
           disabled={isExporting || !ffmpegAvailable}
-          className="px-4 py-1.5 text-xs font-semibold rounded-md bg-ve-accent text-white
-                     hover:bg-ve-accent-h active:scale-95 transition-all
-                     disabled:opacity-40 disabled:cursor-not-allowed"
+          size="sm"
+          variant="primary"
+          icon={<Download className="w-3.5 h-3.5" />}
           title="Export video (Ctrl+E)"
           aria-label="Export video"
           aria-keyshortcuts="Control+E"
         >
           Export
-        </button>
+        </PremiumButton>
       </div>
     </header>
   )
