@@ -27,10 +27,12 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using ReactiveUI;
 using ShareX.VideoEditor.Core;
 using ShareX.VideoEditor.Hosting;
 using ShareX.VideoEditor.Presentation.Controls;
 using ShareX.VideoEditor.Presentation.ViewModels;
+using System.Reactive.Concurrency;
 
 namespace ShareX.VideoEditor.Presentation.Views;
 
@@ -54,6 +56,17 @@ public partial class VideoEditorWindow : Window
 
     public VideoEditorWindow(VideoEditorOptions options)
     {
+        // ReactiveCommand internally does ObserveOn(RxApp.MainThreadScheduler) to route
+        // CanExecuteChanged to the main thread. Without UseReactiveUI() in the host app's
+        // AppBuilder, RxApp.MainThreadScheduler defaults to DefaultScheduler (LongRunning),
+        // causing CanExecuteChanged to fire from a background thread and crashing Avalonia
+        // with "Call from invalid thread". Set it to the Avalonia SynchronizationContext
+        // before the ViewModel (and its ReactiveCommands) are created.
+        if (SynchronizationContext.Current is { } ctx)
+        {
+            RxApp.MainThreadScheduler = new SynchronizationContextScheduler(ctx);
+        }
+
         _options = options;
         _vm = new VideoEditorViewModel(options);
         DataContext = _vm;
