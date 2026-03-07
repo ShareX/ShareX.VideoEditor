@@ -24,14 +24,14 @@
 #endregion License Information (GPL v3)
 
 using System.Diagnostics;
-using Avalonia.Media.Imaging;
 using ShareX.VideoEditor.Hosting;
 
 namespace ShareX.VideoEditor.Core;
 
 /// <summary>
 /// Asynchronously extracts frame thumbnails from a video using FFmpeg.
-/// Thumbnails are used to populate the timeline scrubber track.
+/// Thumbnails are returned as Base64-encoded JPEG data URIs, ready to be
+/// sent over the JSON bridge to the React WebUI timeline scrubber.
 /// </summary>
 public class ThumbnailExtractor
 {
@@ -44,22 +44,21 @@ public class ThumbnailExtractor
 
     /// <summary>
     /// Extracts <paramref name="count"/> evenly-spaced frame thumbnails from the video.
+    /// Each thumbnail is returned as a <c>data:image/jpeg;base64,…</c> data URI string.
     /// </summary>
-    public async Task<IReadOnlyList<Bitmap>> ExtractThumbnailsAsync(
+    public async Task<IReadOnlyList<string>> ExtractThumbnailsAsync(
         string videoPath,
         int count = 24,
         int thumbWidth = 96,
         int thumbHeight = 54,
         CancellationToken cancellationToken = default)
     {
-        var results = new List<Bitmap>();
+        var results = new List<string>();
         var tempDir = Path.Combine(Path.GetTempPath(), "ShareX_VideoEditor_Thumbs_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            // Extract N evenly-spaced frames using FFmpeg fps filter
-            // fps=N/duration gives exactly N frames over the whole video
             double fps = (double)count / await GetDurationSecondsAsync(videoPath, cancellationToken);
             if (double.IsNaN(fps) || fps <= 0) fps = 1;
 
@@ -78,12 +77,12 @@ public class ThumbnailExtractor
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    await using var stream = File.OpenRead(file);
-                    results.Add(new Bitmap(stream));
+                    byte[] bytes = await File.ReadAllBytesAsync(file, cancellationToken);
+                    results.Add("data:image/jpeg;base64," + Convert.ToBase64String(bytes));
                 }
                 catch (Exception ex)
                 {
-                    VideoEditorServices.ReportWarning(nameof(ThumbnailExtractor), $"Failed to load thumbnail '{file}'.", ex);
+                    VideoEditorServices.ReportWarning(nameof(ThumbnailExtractor), $"Failed to encode thumbnail '{file}'.", ex);
                 }
             }
         }
@@ -102,7 +101,6 @@ public class ThumbnailExtractor
 
     private async Task<double> GetDurationSecondsAsync(string videoPath, CancellationToken cancellationToken)
     {
-        // Use ffprobe-style query via FFmpeg stderr
         string args = $"-i \"{videoPath}\"";
         var output = new System.Text.StringBuilder();
 
@@ -118,20 +116,18 @@ public class ThumbnailExtractor
 
         string? line;
         while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
-        {
             output.AppendLine(line);
-        }
 
         await process.WaitForExitAsync(cancellationToken);
 
-        // Parse "Duration: HH:MM:SS.xx" from FFmpeg output
         var durationLine = output.ToString()
             .Split('\n')
             .FirstOrDefault(l => l.TrimStart().StartsWith("Duration:", StringComparison.OrdinalIgnoreCase));
 
         if (durationLine != null)
         {
-            var match = System.Text.RegularExpressions.Regex.Match(durationLine, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
+            var match = System.Text.RegularExpressions.Regex.Match(
+                durationLine, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
             if (match.Success)
             {
                 double hours = double.Parse(match.Groups[1].Value);
@@ -141,7 +137,7 @@ public class ThumbnailExtractor
             }
         }
 
-        return 60; // fallback
+        return 60;
     }
 
     private async Task<bool> RunFFmpegAsync(string args, CancellationToken cancellationToken)

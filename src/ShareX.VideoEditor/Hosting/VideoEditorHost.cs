@@ -1,0 +1,389 @@
+#region License Information (GPL v3)
+
+/*
+    ShareX.VideoEditor - The UI-agnostic Video Editor library for ShareX
+    Copyright (c) 2007-2026 ShareX Team
+
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+    Optionally you can also view the license at <http://www.gnu.org/licenses/>.
+*/
+
+#endregion License Information (GPL v3)
+
+using System.Runtime.InteropServices;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Photino.NET;
+using ShareX.VideoEditor.Core;
+using ShareX.VideoEditor.Hosting.Bridge;
+using ShareX.VideoEditor.Hosting.Diagnostics;
+
+namespace ShareX.VideoEditor.Hosting;
+
+/// <summary>
+/// Public entry point for host applications to open the video editor.
+///
+/// <para>Architecture: A Photino.NET window hosts the compiled React/TypeScript
+/// WebUI (built by Vite into <c>WebUI/dist/</c>). The two sides communicate
+/// through a JSON bridge:</para>
+/// <list type="bullet">
+///   <item>JS → C#: <c>window.external.sendMessage(json)</c></item>
+///   <item>C# → JS: <c>PhotinoWindow.SendWebMessage(json)</c></item>
+/// </list>
+/// </summary>
+public static class VideoEditorHost
+{
+    /// <summary>
+    /// Opens the video editor as a modeless window on a dedicated background thread.
+    /// Returns immediately; the editor runs independently of the caller.
+    /// </summary>
+    public static void ShowEditor(VideoEditorOptions options, VideoEditorEvents? events = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (string.IsNullOrWhiteSpace(options.VideoPath))
+            throw new ArgumentException("VideoEditorOptions.VideoPath must be set.", nameof(options));
+
+        if (events?.DiagnosticReported != null)
+            VideoEditorServices.Diagnostics = new DelegateVideoEditorDiagnosticsSink(events.DiagnosticReported);
+
+        var thread = new Thread(() => new VideoEditorSession(options, events).Run())
+        {
+            IsBackground = true,
+            Name = "ShareX.VideoEditor.Session"
+        };
+
+        // WebView2 on Windows requires STA
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            thread.SetApartmentState(ApartmentState.STA);
+
+        thread.Start();
+    }
+
+    /// <summary>
+    /// Opens the video editor and blocks the calling thread until the editor window closes.
+    /// Returns the path of the exported file, or <c>null</c> if the user cancelled.
+    /// </summary>
+    public static string? ShowEditorDialog(VideoEditorOptions options, VideoEditorEvents? events = null)
+    {
+        string? exportedPath = null;
+        var done = new ManualResetEventSlim(false);
+
+        var wrappedEvents = new VideoEditorEvents
+        {
+            ExportCompleted = path =>
+            {
+                exportedPath = path;
+                try { events?.ExportCompleted?.Invoke(path); } catch { }
+            },
+            ExportFailed = ex => { try { events?.ExportFailed?.Invoke(ex); } catch { } },
+            EditorClosed = () =>
+            {
+                try { events?.EditorClosed?.Invoke(); } catch { }
+                done.Set();
+            },
+            DiagnosticReported = evt => { try { events?.DiagnosticReported?.Invoke(evt); } catch { } }
+        };
+
+        ShowEditor(options, wrappedEvents);
+        done.Wait();
+        return exportedPath;
+    }
+}
+
+/// <summary>
+/// Manages one video editor session: owns the <see cref="PhotinoWindow"/>,
+/// the C# ↔ JS message bridge, and the FFmpeg pipeline.
+/// </summary>
+internal sealed class VideoEditorSession
+{
+    private const string MediaScheme = "sharexmedia";
+
+    private readonly VideoEditorOptions _options;
+    private readonly VideoEditorEvents? _events;
+
+    private PhotinoWindow? _window;
+    private CancellationTokenSource? _exportCts;
+    private CancellationTokenSource? _thumbnailCts;
+
+    public VideoEditorSession(VideoEditorOptions options, VideoEditorEvents? events)
+    {
+        _options = options;
+        _events = events;
+    }
+
+    // ── Entry point ───────────────────────────────────────────────────────────
+
+    public void Run()
+    {
+        string indexHtml = ResolveWebUiPath();
+
+        _window = new PhotinoWindow()
+            .SetTitle(_options.WindowTitle ?? "ShareX — Video Editor")
+            .SetSize(1280, 800)
+            .SetMinSize(900, 600)
+            .SetResizable(true)
+            .SetChromeless(false)
+            .RegisterCustomSchemeHandler(MediaScheme, ServeMediaFile)
+            .RegisterWebMessageReceivedHandler(OnWebMessage);
+
+        _window.Load(new Uri(indexHtml));
+        _window.WaitForClose();
+
+        // Clean up in-flight operations
+        _thumbnailCts?.Cancel();
+        _exportCts?.Cancel();
+
+        try { _events?.EditorClosed?.Invoke(); } catch { }
+    }
+
+    // ── Custom scheme: serve the local video file to the WebView ─────────────
+
+    private Stream ServeMediaFile(object sender, string scheme, string url, out string contentType)
+    {
+        contentType = GetVideoMimeType(_options.VideoPath);
+        try
+        {
+            return new FileStream(_options.VideoPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex)
+        {
+            VideoEditorServices.ReportError(nameof(VideoEditorSession), "Failed to open video for streaming.", ex);
+            contentType = "application/octet-stream";
+            return Stream.Null;
+        }
+    }
+
+    // ── Inbound JS → C# messages ──────────────────────────────────────────────
+
+    private void OnWebMessage(object? sender, string message)
+    {
+        try
+        {
+            var obj = JObject.Parse(message);
+            string? type = obj["type"]?.Value<string>();
+
+            switch (type)
+            {
+                case "ready":
+                    SendConfig();
+                    StartThumbnailExtraction();
+                    break;
+
+                case "requestExport":
+                    var payload = obj.ToObject<ExportPayload>() ?? new ExportPayload();
+                    HandleExportRequest(payload);
+                    break;
+
+                case "cancelExport":
+                    _exportCts?.Cancel();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            VideoEditorServices.ReportError(nameof(VideoEditorSession), "Error processing bridge message.", ex);
+        }
+    }
+
+    // ── Outbound C# → JS helpers ──────────────────────────────────────────────
+
+    private void Send(object payload)
+    {
+        try
+        {
+            _window?.SendWebMessage(JsonConvert.SerializeObject(payload));
+        }
+        catch (Exception ex)
+        {
+            VideoEditorServices.ReportWarning(nameof(VideoEditorSession), "Failed to send bridge message.", ex);
+        }
+    }
+
+    // ── Config message ────────────────────────────────────────────────────────
+
+    private void SendConfig()
+    {
+        // The video is served via the custom scheme; build the URL the WebView will use.
+        string videoUrl = $"{MediaScheme}://host/video";
+
+        Send(new
+        {
+            type = "config",
+            videoUrl,
+            theme = _options.Theme,
+            culture = _options.Culture ?? string.Empty,
+            ffmpegAvailable = !string.IsNullOrWhiteSpace(_options.FFmpegPath) && File.Exists(_options.FFmpegPath),
+            watermark = _options.WatermarkSettings != null ? new
+            {
+                enabled = _options.WatermarkSettings.Enabled,
+                text = _options.WatermarkSettings.Text,
+                imagePath = _options.WatermarkSettings.ImagePath,
+                opacity = _options.WatermarkSettings.Opacity,
+                positionX = _options.WatermarkSettings.PositionX,
+                positionY = _options.WatermarkSettings.PositionY,
+                fontSize = _options.WatermarkSettings.FontSize,
+                fontColor = _options.WatermarkSettings.FontColor
+            } : null
+        });
+    }
+
+    // ── Thumbnail extraction ──────────────────────────────────────────────────
+
+    private void StartThumbnailExtraction()
+    {
+        if (string.IsNullOrWhiteSpace(_options.FFmpegPath) || !File.Exists(_options.FFmpegPath))
+        {
+            VideoEditorServices.ReportWarning(nameof(VideoEditorSession),
+                "FFmpegPath is not set or does not exist — thumbnails will not be generated.");
+            return;
+        }
+
+        _thumbnailCts?.Cancel();
+        _thumbnailCts = new CancellationTokenSource();
+        var token = _thumbnailCts.Token;
+
+        // Run on a thread-pool thread to avoid blocking the Photino event loop
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var extractor = new ThumbnailExtractor(_options.FFmpegPath);
+                var frames = await extractor.ExtractThumbnailsAsync(
+                    _options.VideoPath, count: 24, cancellationToken: token);
+
+                Send(new { type = "thumbnails", frames });
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                VideoEditorServices.ReportWarning(nameof(VideoEditorSession), "Thumbnail extraction failed.", ex);
+            }
+        }, token);
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    private void HandleExportRequest(ExportPayload payload)
+    {
+        // Show a native save dialog synchronously on the Photino (UI) thread
+        string ext = GetExtension(payload.OutputFormat);
+        string? outputPath = _window?.ShowSaveFile(
+            "Export Video",
+            Path.GetFileNameWithoutExtension(_options.VideoPath) + "_edited." + ext,
+            new[] { (payload.OutputFormat + " File", new[] { "*." + ext }) });
+        if (string.IsNullOrWhiteSpace(outputPath)) return;
+
+        _exportCts?.Cancel();
+        _exportCts = new CancellationTokenSource();
+        var token = _exportCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var exportOptions = BuildExportOptions(payload, outputPath);
+                var service = new VideoExportService(_options.FFmpegPath);
+
+                await service.ExportAsync(
+                    exportOptions,
+                    progress => Send(new
+                    {
+                        type = "exportProgress",
+                        percent = progress.ProgressPercent,
+                        message = progress.StatusMessage
+                    }),
+                    token);
+
+                Send(new { type = "exportComplete", outputPath });
+                try { _events?.ExportCompleted?.Invoke(outputPath); } catch { }
+            }
+            catch (OperationCanceledException)
+            {
+                Send(new { type = "exportCancelled" });
+            }
+            catch (Exception ex)
+            {
+                VideoEditorServices.ReportError(nameof(VideoEditorSession), "Export failed.", ex);
+                Send(new { type = "exportError", message = ex.Message });
+                try { _events?.ExportFailed?.Invoke(ex); } catch { }
+            }
+        }, token);
+    }
+
+    private VideoExportOptions BuildExportOptions(ExportPayload payload, string outputPath) => new()
+    {
+        InputPath = _options.VideoPath,
+        OutputPath = outputPath,
+        OutputFormat = payload.OutputFormat,
+        IsTrimActive = payload.IsTrimActive,
+        TrimStart = TimeSpan.FromSeconds(payload.TrimStart),
+        TrimEnd = TimeSpan.FromSeconds(payload.TrimEnd),
+        IsCropActive = payload.IsCropActive,
+        CropX = payload.CropX,
+        CropY = payload.CropY,
+        CropWidth = payload.CropWidth,
+        CropHeight = payload.CropHeight,
+        OutputFps = payload.Fps,
+        QualityScale = payload.QualityScale,
+        Watermark = payload.WatermarkEnabled ? _options.WatermarkSettings : null,
+        WatermarkText = payload.WatermarkEnabled ? payload.WatermarkText : string.Empty
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves the path to the compiled WebUI <c>index.html</c>.
+    /// The Vite build output is copied to <c>WebUI/dist/</c> next to the assembly DLL.
+    /// </summary>
+    private static string ResolveWebUiPath()
+    {
+        string assemblyDir = Path.GetDirectoryName(typeof(VideoEditorHost).Assembly.Location)
+            ?? AppContext.BaseDirectory;
+
+        string candidate = Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
+        if (File.Exists(candidate)) return candidate;
+
+        // Dev fallback: look for the Vite dev server output relative to the source tree
+        string? dir = assemblyDir;
+        for (int i = 0; i < 6; i++)
+        {
+            dir = Path.GetDirectoryName(dir);
+            if (dir == null) break;
+            string devPath = Path.Combine(dir, "src", "WebUI", "dist", "index.html");
+            if (File.Exists(devPath)) return devPath;
+        }
+
+        throw new FileNotFoundException(
+            "WebUI dist not found. Run 'npm run build' inside src/WebUI first.", candidate);
+    }
+
+    private static string GetExtension(string format) => format.ToUpperInvariant() switch
+    {
+        "WEBM" => "webm",
+        "GIF"  => "gif",
+        "WEBP" => "webp",
+        _      => "mp4"
+    };
+
+    private static string GetVideoMimeType(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".webm" => "video/webm",
+            ".ogv"  => "video/ogg",
+            ".mov"  => "video/quicktime",
+            _       => "video/mp4"
+        };
+}

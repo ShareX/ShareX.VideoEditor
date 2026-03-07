@@ -28,7 +28,7 @@ namespace ShareX.VideoEditor.Hosting;
 /// <summary>
 /// Configuration payload passed by the host application when opening the video editor.
 /// Host applications (XerahS, ShareX) create an instance of this and pass it to
-/// <see cref="AvaloniaIntegration.ShowEditor"/>.
+/// <see cref="VideoEditorHost.ShowEditor"/> or <see cref="VideoEditorHost.ShowEditorDialog"/>.
 /// </summary>
 public class VideoEditorOptions
 {

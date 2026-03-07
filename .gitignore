@@ -301,6 +301,9 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# WebUI compiled output (generated; built by Vite during C# pre-build step)
+src/WebUI/dist/
+
 # Visual Studio 6 build log
 *.plg
 

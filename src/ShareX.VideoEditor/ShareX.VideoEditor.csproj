@@ -6,24 +6,35 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>ShareX.VideoEditor</RootNamespace>
     <AssemblyName>ShareX.VideoEditor</AssemblyName>
+    <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
+    <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Avalonia -->
-    <PackageReference Include="Avalonia" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
-    <PackageReference Include="FluentAvaloniaUI" Version="2.4.1" />
+    <!-- Photino.NET — OS-native WebView host (WebView2 on Windows, WebKit on Linux/macOS) -->
+    <PackageReference Include="Photino.NET" Version="3.0.14" />
 
-    <!-- MVVM -->
-    <PackageReference Include="ReactiveUI" Version="22.3.1" />
-
-    <!-- Serialization -->
+    <!-- Serialization for C# ↔ JS bridge messages -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
-  </ItemGroup>
+  <!-- ── WebUI build integration ────────────────────────────────────────────── -->
+  <!-- Runs `npm ci && npm run build` inside src/WebUI before the C# build.    -->
+  <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
+  <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true'">
+    <Message Text="[VideoEditor] Building WebUI…" Importance="high" />
+    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
+  </Target>
+
+  <!-- Copy compiled WebUI dist/ next to the output DLL so the host can find it -->
+  <Target Name="CopyWebUIDist" AfterTargets="Build">
+    <ItemGroup>
+      <WebUIDistFiles Include="$(MSBuildProjectDirectory)/../WebUI/dist/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebUIDistFiles)"
+          DestinationFolder="$(OutputPath)WebUI/%(RecursiveDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(MSBuildProjectDirectory)/../WebUI/dist')" />
+  </Target>
 </Project>
