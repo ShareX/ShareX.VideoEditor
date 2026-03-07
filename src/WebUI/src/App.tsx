@@ -38,6 +38,15 @@ const DEFAULT_STATE: EditorState = {
   activePanel: 'trim',
 }
 
+function applyTheme(theme: EditorState['theme']) {
+  const el = document.documentElement
+  if (theme === 'System') {
+    el.removeAttribute('data-theme')
+  } else {
+    el.setAttribute('data-theme', theme.toLowerCase())
+  }
+}
+
 export default function App() {
   const [state, setState] = useState<EditorState>(DEFAULT_STATE)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -48,6 +57,7 @@ export default function App() {
   const handleMessage = useCallback((msg: InboundMessage) => {
     switch (msg.type) {
       case 'config':
+        applyTheme(msg.theme)
         setState(s => ({
           ...s,
           videoUrl: msg.videoUrl,

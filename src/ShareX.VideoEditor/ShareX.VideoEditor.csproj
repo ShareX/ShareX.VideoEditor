@@ -27,13 +27,14 @@
     <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
   </Target>
 
-  <!-- Copy compiled WebUI dist/ next to the output DLL so the host can find it -->
+  <!-- Copy compiled WebUI dist/ next to the output DLL so the host can find it.   -->
+  <!-- Destination must be $(OutputPath)WebUI/dist/… to match ResolveWebUiPath(). -->
   <Target Name="CopyWebUIDist" AfterTargets="Build">
     <ItemGroup>
       <WebUIDistFiles Include="$(MSBuildProjectDirectory)/../WebUI/dist/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(WebUIDistFiles)"
-          DestinationFolder="$(OutputPath)WebUI/%(RecursiveDir)"
+          DestinationFolder="$(OutputPath)WebUI/dist/%(RecursiveDir)"
           SkipUnchangedFiles="true"
           Condition="Exists('$(MSBuildProjectDirectory)/../WebUI/dist')" />
   </Target>

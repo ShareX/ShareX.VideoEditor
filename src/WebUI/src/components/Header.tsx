@@ -34,17 +34,19 @@ export default function Header({
       </div>
 
       {/* Center: export progress */}
-      {isExporting && (
-        <div className="flex items-center gap-2 flex-1 justify-center">
-          <span className="text-xs text-ve-accent">{exportStatusMessage}</span>
-          <div className="w-28 h-1 bg-ve-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-ve-accent rounded-full transition-all duration-300"
-              style={{ width: `${exportProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
+      <div className="flex items-center gap-2 flex-1 justify-center" aria-live="polite" aria-atomic="true">
+        {isExporting && (
+          <>
+            <span className="text-xs text-ve-accent">{exportStatusMessage}</span>
+            <div className="w-28 h-1 bg-ve-border rounded-full overflow-hidden" role="progressbar" aria-valuenow={exportProgress} aria-valuemin={0} aria-valuemax={100}>
+              <div
+                className="h-full bg-ve-accent ve-progress-active rounded-full transition-all duration-300"
+                style={{ width: `${exportProgress}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="ml-auto flex items-center gap-2">
         {!ffmpegAvailable && (
@@ -59,6 +61,8 @@ export default function Header({
                      hover:bg-ve-accent-h active:scale-95 transition-all
                      disabled:opacity-40 disabled:cursor-not-allowed"
           title="Export video (Ctrl+E)"
+          aria-label="Export video"
+          aria-keyshortcuts="Control+E"
         >
           Export
         </button>

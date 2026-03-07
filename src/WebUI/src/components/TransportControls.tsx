@@ -36,6 +36,8 @@ export default function TransportControls({
           onClick={onSkipBack}
           className="w-9 h-9 rounded-lg bg-ve-elevated hover:bg-ve-border active:scale-90 transition-all flex items-center justify-center text-ve-secondary hover:text-ve-text"
           title="Skip back 5s (←)"
+          aria-label="Skip back 5 seconds"
+          aria-keyshortcuts="ArrowLeft"
         >
           ⏮
         </button>
@@ -43,6 +45,8 @@ export default function TransportControls({
           onClick={onPlayPause}
           className="w-11 h-11 rounded-full bg-ve-accent hover:bg-ve-accent-h active:scale-90 transition-all flex items-center justify-center text-white text-lg"
           title="Play / Pause (Space)"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          aria-keyshortcuts="Space"
         >
           {isPlaying ? '⏸' : '▶'}
         </button>
@@ -50,6 +54,8 @@ export default function TransportControls({
           onClick={onSkipForward}
           className="w-9 h-9 rounded-lg bg-ve-elevated hover:bg-ve-border active:scale-90 transition-all flex items-center justify-center text-ve-secondary hover:text-ve-text"
           title="Skip forward 5s (→)"
+          aria-label="Skip forward 5 seconds"
+          aria-keyshortcuts="ArrowRight"
         >
           ⏭
         </button>
@@ -67,6 +73,7 @@ export default function TransportControls({
           onChange={e => onVolumeChange(parseFloat(e.target.value))}
           className="w-20"
           title="Volume"
+          aria-label="Volume"
         />
       </div>
     </div>

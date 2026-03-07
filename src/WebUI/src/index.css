@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables — Dark (default) ──────────────────────────────────────
+   Values are space-separated R G B channels so Tailwind's opacity modifiers
+   (e.g. bg-ve-base/80) work correctly via `rgb(var(--ve-base) / 0.8)`.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --ve-base:      8 8 15;       /* #08080f */
+  --ve-surface:   17 17 24;     /* #111118 */
+  --ve-elevated:  26 26 36;     /* #1a1a24 */
+  --ve-border:    42 42 58;     /* #2a2a3a */
+  --ve-accent:    124 109 250;  /* #7c6dfa */
+  --ve-accent-h:  157 145 252;  /* #9d91fc */
+  --ve-text:      240 240 248;  /* #f0f0f8 */
+  --ve-secondary: 144 144 168;  /* #9090a8 */
+  --ve-muted:     85 85 104;    /* #555568 */
+  --ve-track:     13 13 20;     /* #0d0d14 */
+}
+
+/* ── Light theme (explicit) ────────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --ve-base:      245 245 250;  /* #f5f5fa */
+  --ve-surface:   255 255 255;  /* #ffffff */
+  --ve-elevated:  235 235 245;  /* #ebebf5 */
+  --ve-border:    208 208 224;  /* #d0d0e0 */
+  --ve-accent:    96 85 224;    /* #6055e0 */
+  --ve-accent-h:  124 109 250;  /* #7c6dfa */
+  --ve-text:      17 17 24;     /* #111118 */
+  --ve-secondary: 85 85 104;    /* #555568 */
+  --ve-muted:     144 144 168;  /* #9090a8 */
+  --ve-track:     224 224 237;  /* #e0e0ed */
+}
+
+/* ── System theme: follow OS preference when no explicit theme is set ────────
+   data-theme is removed from <html> when theme === 'System' in App.tsx.      */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --ve-base:      245 245 250;
+    --ve-surface:   255 255 255;
+    --ve-elevated:  235 235 245;
+    --ve-border:    208 208 224;
+    --ve-accent:    96 85 224;
+    --ve-accent-h:  124 109 250;
+    --ve-text:      17 17 24;
+    --ve-secondary: 85 85 104;
+    --ve-muted:     144 144 168;
+    --ve-track:     224 224 237;
+  }
+}
+
 /* ── Base reset ────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
@@ -13,8 +61,8 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #08080f;
-  color: #f0f0f8;
+  background: rgb(var(--ve-base));
+  color: rgb(var(--ve-text));
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -25,14 +73,14 @@ html, body, #root {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d0d14;
+  background: rgb(var(--ve-track));
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a3a;
+  background: rgb(var(--ve-border));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a52;
+  background: rgb(var(--ve-elevated));
 }
 
 /* ── Range input (volume / fps / quality sliders) ──────────────────────────── */
@@ -44,7 +92,7 @@ input[type='range'] {
 }
 input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
-  background: #2a2a3a;
+  background: rgb(var(--ve-border));
   border-radius: 2px;
 }
 input[type='range']::-webkit-slider-thumb {
@@ -52,12 +100,43 @@ input[type='range']::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #7c6dfa;
+  background: rgb(var(--ve-accent));
   margin-top: -5px;
   transition: background 0.15s;
 }
 input[type='range']:hover::-webkit-slider-thumb {
-  background: #9d91fc;
+  background: rgb(var(--ve-accent-h));
+}
+
+/* ── Micro-animations ──────────────────────────────────────────────────────── */
+
+/* Panel tab indicator slide */
+@keyframes ve-tab-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Fade-in for tool panel content on tab switch */
+.ve-panel-content {
+  animation: ve-tab-in 0.15s ease-out both;
+}
+
+/* Export overlay entrance */
+@keyframes ve-overlay-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.ve-overlay-card {
+  animation: ve-overlay-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Pulse the accent progress bar while exporting */
+@keyframes ve-progress-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+.ve-progress-active {
+  animation: ve-progress-pulse 1.4s ease-in-out infinite;
 }
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */
@@ -65,4 +144,11 @@ input[type='range']:hover::-webkit-slider-thumb {
   font-family: 'Cascadia Mono', 'Consolas', monospace;
   font-size: 0.75rem;
   letter-spacing: 0.03em;
+}
+
+/* Focus ring — visible keyboard navigation */
+:focus-visible {
+  outline: 2px solid rgb(var(--ve-accent));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
