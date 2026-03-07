@@ -2,55 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Theme variables — Dark (default) ──────────────────────────────────────
-   Values are space-separated R G B channels so Tailwind's opacity modifiers
-   (e.g. bg-ve-base/80) work correctly via `rgb(var(--ve-base) / 0.8)`.
+/* ── Theme Variables ───────────────────────────────────────────────────────────
+   Values are space-separated R G B so Tailwind opacity modifiers work.
+   Dark = deep black / graphite. Light = soft white / pale grey.
+   Accent = warm amber / gold metallic.
    ─────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --ve-base:      8 8 15;       /* #08080f */
-  --ve-surface:   17 17 24;     /* #111118 */
-  --ve-elevated:  26 26 36;     /* #1a1a24 */
-  --ve-border:    42 42 58;     /* #2a2a3a */
-  --ve-accent:    124 109 250;  /* #7c6dfa */
-  --ve-accent-h:  157 145 252;  /* #9d91fc */
-  --ve-text:      240 240 248;  /* #f0f0f8 */
-  --ve-secondary: 144 144 168;  /* #9090a8 */
-  --ve-muted:     85 85 104;    /* #555568 */
-  --ve-track:     13 13 20;     /* #0d0d14 */
+  --ve-base:      9 9 11;         /* zinc-950 */
+  --ve-surface:   18 18 22;       /* near zinc-900 */
+  --ve-elevated:  30 30 36;       /* graphite */
+  --ve-glass:     24 24 30;       /* glass panel fill */
+  --ve-border:    39 39 48;       /* subtle dark border */
+  --ve-accent:    245 158 11;     /* amber-500 */
+  --ve-accent-h:  251 191 36;    /* amber-400 */
+  --ve-text:      244 244 245;   /* zinc-100 */
+  --ve-secondary: 161 161 170;   /* zinc-400 */
+  --ve-muted:     82 82 91;      /* zinc-600 */
+  --ve-track:     12 12 16;      /* deepest */
 }
 
-/* ── Light theme (explicit) ────────────────────────────────────────────────── */
 :root[data-theme="light"] {
-  --ve-base:      245 245 250;  /* #f5f5fa */
-  --ve-surface:   255 255 255;  /* #ffffff */
-  --ve-elevated:  235 235 245;  /* #ebebf5 */
-  --ve-border:    208 208 224;  /* #d0d0e0 */
-  --ve-accent:    96 85 224;    /* #6055e0 */
-  --ve-accent-h:  124 109 250;  /* #7c6dfa */
-  --ve-text:      17 17 24;     /* #111118 */
-  --ve-secondary: 85 85 104;    /* #555568 */
-  --ve-muted:     144 144 168;  /* #9090a8 */
-  --ve-track:     224 224 237;  /* #e0e0ed */
+  --ve-base:      250 250 250;   /* zinc-50 */
+  --ve-surface:   255 255 255;   /* white */
+  --ve-elevated:  244 244 245;   /* zinc-100 */
+  --ve-glass:     250 250 252;   /* near white glass */
+  --ve-border:    228 228 231;   /* zinc-200 */
+  --ve-accent:    217 119 6;     /* amber-600 */
+  --ve-accent-h:  245 158 11;   /* amber-500 */
+  --ve-text:      24 24 27;      /* zinc-900 */
+  --ve-secondary: 82 82 91;     /* zinc-600 */
+  --ve-muted:     161 161 170;   /* zinc-400 */
+  --ve-track:     244 244 245;   /* zinc-100 */
 }
 
-/* ── System theme: follow OS preference when no explicit theme is set ────────
-   data-theme is removed from <html> when theme === 'System' in App.tsx.      */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --ve-base:      245 245 250;
+    --ve-base:      250 250 250;
     --ve-surface:   255 255 255;
-    --ve-elevated:  235 235 245;
-    --ve-border:    208 208 224;
-    --ve-accent:    96 85 224;
-    --ve-accent-h:  124 109 250;
-    --ve-text:      17 17 24;
-    --ve-secondary: 85 85 104;
-    --ve-muted:     144 144 168;
-    --ve-track:     224 224 237;
+    --ve-elevated:  244 244 245;
+    --ve-glass:     250 250 252;
+    --ve-border:    228 228 231;
+    --ve-accent:    217 119 6;
+    --ve-accent-h:  245 158 11;
+    --ve-text:      24 24 27;
+    --ve-secondary: 82 82 91;
+    --ve-muted:     161 161 170;
+    --ve-track:     244 244 245;
   }
 }
 
-/* ── Base reset ────────────────────────────────────────────────────────────── */
+/* ── Base Reset ────────────────────────────────────────────────────────────── */
+
 * {
   box-sizing: border-box;
 }
@@ -67,34 +70,42 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Scrollbar styling ─────────────────────────────────────────────────────── */
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: rgb(var(--ve-track));
-}
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--ve-border));
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--ve-elevated));
+  width: 5px;
+  height: 5px;
 }
 
-/* ── Range input (volume / fps / quality sliders) ──────────────────────────── */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--ve-border));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--ve-muted));
+}
+
+/* ── Range Input ───────────────────────────────────────────────────────────── */
+
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
   cursor: pointer;
+  height: 20px;
 }
+
 input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   background: rgb(var(--ve-border));
-  border-radius: 2px;
+  border-radius: 999px;
 }
+
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
@@ -102,53 +113,48 @@ input[type='range']::-webkit-slider-thumb {
   border-radius: 50%;
   background: rgb(var(--ve-accent));
   margin-top: -5px;
-  transition: background 0.15s;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
 }
+
 input[type='range']:hover::-webkit-slider-thumb {
   background: rgb(var(--ve-accent-h));
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  transform: scale(1.15);
 }
 
-/* ── Micro-animations ──────────────────────────────────────────────────────── */
-
-/* Panel tab indicator slide */
-@keyframes ve-tab-in {
-  from { opacity: 0; transform: translateY(3px); }
-  to   { opacity: 1; transform: translateY(0); }
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(0.95);
 }
 
-/* Fade-in for tool panel content on tab switch */
-.ve-panel-content {
-  animation: ve-tab-in 0.15s ease-out both;
+/* ── Focus Ring ────────────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid rgb(var(--ve-accent) / 0.5);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
-/* Export overlay entrance */
-@keyframes ve-overlay-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
-}
-.ve-overlay-card {
-  animation: ve-overlay-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
+/* ── Utility Classes ───────────────────────────────────────────────────────── */
 
-/* Pulse the accent progress bar while exporting */
-@keyframes ve-progress-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.7; }
-}
-.ve-progress-active {
-  animation: ve-progress-pulse 1.4s ease-in-out infinite;
-}
-
-/* ── Utility ───────────────────────────────────────────────────────────────── */
 .ve-timecode {
   font-family: 'Cascadia Mono', 'Consolas', monospace;
   font-size: 0.75rem;
   letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Focus ring — visible keyboard navigation */
-:focus-visible {
-  outline: 2px solid rgb(var(--ve-accent));
-  outline-offset: 2px;
-  border-radius: 4px;
+/* Glass surface utility */
+@layer utilities {
+  .ve-glass {
+    background: rgb(var(--ve-glass) / 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .ve-glass-heavy {
+    background: rgb(var(--ve-glass) / 0.9);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
 }
