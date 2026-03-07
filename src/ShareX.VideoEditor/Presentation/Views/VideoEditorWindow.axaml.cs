@@ -179,7 +179,11 @@ public partial class VideoEditorWindow : Window
         }
         finally
         {
-            _vm.IsThumbnailsLoading = false;
+            // Always dispatch to the UI thread — the awaited FFmpeg process tasks
+            // resume on a thread-pool thread, so setting VM properties here without
+            // marshalling triggers ReactiveUI property-change notifications off the
+            // UI thread, causing Avalonia's "Call from invalid thread" crash.
+            await Dispatcher.UIThread.InvokeAsync(() => _vm.IsThumbnailsLoading = false);
         }
     }
 
@@ -231,34 +235,43 @@ public partial class VideoEditorWindow : Window
 
             await _exportService.ExportAsync(
                 exportOptions,
-                progress =>
+                // Progress callback fires from FFmpeg stderr read thread — marshal to UI.
+                progress => Dispatcher.UIThread.Post(() =>
                 {
                     _vm.ExportProgress = progress.ProgressPercent;
                     _vm.ExportStatusMessage = progress.StatusMessage;
-                },
+                }),
                 _exportCts.Token);
 
-            _vm.ExportProgress = 100;
-            _vm.ExportStatusMessage = "Done!";
-
-            ExportCompleted?.Invoke(outputPath);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _vm.ExportProgress = 100;
+                _vm.ExportStatusMessage = "Done!";
+                ExportCompleted?.Invoke(outputPath);
+            });
         }
         catch (OperationCanceledException)
         {
-            _vm.ExportStatusMessage = "Cancelled";
+            await Dispatcher.UIThread.InvokeAsync(() => _vm.ExportStatusMessage = "Cancelled");
         }
         catch (Exception ex)
         {
             VideoEditorServices.ReportError(nameof(VideoEditorWindow), "Export failed.", ex);
-            ExportFailed?.Invoke(ex);
-            _vm.ExportStatusMessage = "Export failed";
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ExportFailed?.Invoke(ex);
+                _vm.ExportStatusMessage = "Export failed";
+            });
         }
         finally
         {
             await Task.Delay(1500); // brief display of final status
-            _vm.IsExporting = false;
-            _vm.ExportProgress = 0;
-            _vm.ExportStatusMessage = string.Empty;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _vm.IsExporting = false;
+                _vm.ExportProgress = 0;
+                _vm.ExportStatusMessage = string.Empty;
+            });
         }
     }
 
