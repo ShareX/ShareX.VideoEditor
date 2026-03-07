@@ -209,8 +209,7 @@ export default function App() {
   }, [togglePlayPause, skipBack, skipForward, requestExport, state.isExporting])
 
   return (
-    <div className="flex flex-col w-full h-full bg-ve-base select-none overflow-hidden">
-      {/* ROW 0 — Header */}
+    <div className="relative flex flex-col w-full h-full bg-ve-base select-none overflow-hidden">
       <Header
         videoPath={state.videoUrl}
         isExporting={state.isExporting}
@@ -220,9 +219,7 @@ export default function App() {
         onExport={requestExport}
       />
 
-      {/* ROW 1 — Video player + tools side-by-side */}
       <div className="flex flex-1 min-h-0">
-        {/* Video column */}
         <div className="flex flex-col flex-1 min-w-0">
           <VideoPlayer
             videoRef={videoRef}
@@ -236,7 +233,6 @@ export default function App() {
             onCancelExport={cancelExport}
           />
 
-          {/* ROW 2 — Transport controls */}
           <TransportControls
             position={state.position}
             duration={state.duration}
@@ -248,7 +244,6 @@ export default function App() {
             onVolumeChange={setVolume}
           />
 
-          {/* ROW 3 — Timeline scrubber */}
           <TimelineScrubber
             duration={state.duration}
             position={state.position}
@@ -265,7 +260,6 @@ export default function App() {
           />
         </div>
 
-        {/* ROW 1 col 2 — Tools panel */}
         <ToolPanel
           state={state}
           onStateChange={patch => setState(s => ({ ...s, ...patch }))}
@@ -273,7 +267,6 @@ export default function App() {
         />
       </div>
 
-      {/* Export overlay */}
       {state.isExporting && (
         <ExportOverlay
           progress={state.exportProgress}
