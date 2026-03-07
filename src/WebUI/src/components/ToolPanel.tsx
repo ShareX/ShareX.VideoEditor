@@ -1,5 +1,13 @@
+import {
+  Scissors, Crop, Type, Settings,
+  Move, RotateCcw, Download,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { ActivePanel, EditorState, OutputFormat } from '../types/bridge'
+import {
+  PremiumButton, PremiumInput, PremiumSelect,
+  PremiumSlider, PremiumToggle, SectionLabel, FieldRow,
+} from './ui'
 
 const OUTPUT_FORMATS: OutputFormat[] = ['MP4', 'WebM', 'GIF', 'WebP']
 
@@ -9,50 +17,65 @@ interface ToolPanelProps {
   onExport: () => void
 }
 
-export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelProps) {
-  const tab = (label: string, panel: ActivePanel) => (
-    <button
-      key={panel}
-      onClick={() => onStateChange({ activePanel: panel })}
-      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-        state.activePanel === panel
-          ? 'bg-ve-accent text-white'
-          : 'text-ve-secondary hover:text-ve-text hover:bg-ve-elevated'
-      }`}
-    >
-      {label}
-    </button>
-  )
+const TABS: { id: ActivePanel; label: string; icon: typeof Scissors }[] = [
+  { id: 'trim', label: 'Trim', icon: Scissors },
+  { id: 'crop', label: 'Crop', icon: Crop },
+  { id: 'watermark', label: 'Text', icon: Type },
+  { id: 'export', label: 'Export', icon: Settings },
+]
 
+export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelProps) {
   return (
-    <aside className="flex flex-col w-72 shrink-0 bg-ve-surface border-l border-ve-border">
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 p-2 border-b border-ve-border">
-        {tab('Trim', 'trim')}
-        {tab('Crop', 'crop')}
-        {tab('Watermark', 'watermark')}
-        {tab('Export', 'export')}
+    <aside className="flex flex-col w-72 shrink-0 bg-ve-surface/60 backdrop-blur-md border-l border-white/[0.06]">
+      {/* Segmented tab bar */}
+      <div className="p-3">
+        <div className="flex items-center gap-0.5 p-1 rounded-2xl bg-ve-elevated/50 ring-1 ring-white/[0.06]">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const active = state.activePanel === id
+            return (
+              <button
+                key={id}
+                onClick={() => onStateChange({ activePanel: id })}
+                className={`
+                  flex-1 flex items-center justify-center gap-1.5
+                  h-8 rounded-xl text-xs font-medium
+                  transition-all duration-200 ease-out
+                  ${active
+                    ? 'bg-ve-accent/15 text-amber-400 ring-1 ring-amber-400/40 shadow-glow-amber-sm'
+                    : 'text-ve-secondary hover:text-ve-text hover:bg-white/[0.05]'
+                  }
+                `}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {state.activePanel === 'trim' && <TrimPanel state={state} onChange={onStateChange} />}
-        {state.activePanel === 'crop' && <CropPanel state={state} onChange={onStateChange} />}
-        {state.activePanel === 'watermark' && <WatermarkPanel state={state} onChange={onStateChange} />}
-        {state.activePanel === 'export' && <ExportSettingsPanel state={state} onChange={onStateChange} />}
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-5">
+        <div className="animate-slide-up">
+          {state.activePanel === 'trim' && <TrimPanel state={state} />}
+          {state.activePanel === 'crop' && <CropPanel state={state} onChange={onStateChange} />}
+          {state.activePanel === 'watermark' && <WatermarkPanel state={state} onChange={onStateChange} />}
+          {state.activePanel === 'export' && <ExportSettingsPanel state={state} onChange={onStateChange} />}
+        </div>
       </div>
 
       {/* Primary export button */}
-      <div className="p-4 border-t border-ve-border">
-        <button
+      <div className="p-4 border-t border-white/[0.06]">
+        <PremiumButton
           onClick={onExport}
           disabled={state.isExporting || !state.ffmpegAvailable}
-          className="w-full py-2.5 text-sm font-semibold rounded-lg bg-ve-accent text-white
-                     hover:bg-ve-accent-h active:scale-[0.98] transition-all
-                     disabled:opacity-40 disabled:cursor-not-allowed"
+          variant="primary"
+          size="lg"
+          className="w-full"
+          icon={<Download className="w-4 h-4" />}
         >
           Export Video
-        </button>
+        </PremiumButton>
       </div>
     </aside>
   )
@@ -60,25 +83,8 @@ export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelP
 
 // ── Sub-panels ────────────────────────────────────────────────────────────────
 
-function SectionHeader({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-[10px] font-semibold tracking-widest text-ve-muted uppercase mb-2">
-      {children}
-    </p>
-  )
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-ve-secondary shrink-0">{label}</span>
-      <span className="text-xs font-mono text-ve-text">{children}</span>
-    </div>
-  )
-}
-
-function TrimPanel({ state }: { state: EditorState; onChange?: (p: Partial<EditorState>) => void }) {
-  const formatTime = (s: number) => {
+function TrimPanel({ state }: { state: EditorState }) {
+  const fmt = (s: number) => {
     const m = Math.floor(s / 60)
     const sec = Math.floor(s % 60)
     return `${m}:${String(sec).padStart(2, '0')}`
@@ -87,17 +93,21 @@ function TrimPanel({ state }: { state: EditorState; onChange?: (p: Partial<Edito
 
   return (
     <>
-      <SectionHeader>Trim</SectionHeader>
+      <SectionLabel>Trim</SectionLabel>
       {state.isTrimActive ? (
-        <div className="space-y-2">
-          <Row label="In">{formatTime(state.trimStart)}</Row>
-          <Row label="Out">{formatTime(state.trimEnd)}</Row>
-          <Row label="Duration">{formatTime(dur)}</Row>
+        <div className="space-y-2.5 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/[0.06]">
+          <FieldRow label="In">{fmt(state.trimStart)}</FieldRow>
+          <FieldRow label="Out">{fmt(state.trimEnd)}</FieldRow>
+          <div className="h-px bg-white/[0.06]" />
+          <FieldRow label="Duration">{fmt(dur)}</FieldRow>
         </div>
       ) : (
-        <p className="text-xs text-ve-muted">
-          Drag the trim handles on the timeline, or use [ Set In ] / [ Set Out ] buttons.
-        </p>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <Scissors className="w-8 h-8 text-ve-muted/50" />
+          <p className="text-xs text-ve-muted leading-relaxed max-w-[200px]">
+            Drag the trim handles on the timeline, or use the Set In / Set Out buttons below.
+          </p>
+        </div>
       )}
     </>
   )
@@ -106,22 +116,25 @@ function TrimPanel({ state }: { state: EditorState; onChange?: (p: Partial<Edito
 function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Partial<EditorState>) => void }) {
   return (
     <>
-      <SectionHeader>Crop</SectionHeader>
-      <button
+      <SectionLabel>Crop</SectionLabel>
+      <PremiumButton
         onClick={() => onChange({ isCropMode: !state.isCropMode })}
-        className="w-full py-2 text-xs font-medium rounded-lg bg-ve-accent text-white hover:bg-ve-accent-h transition-colors"
+        variant={state.isCropMode ? 'primary' : 'secondary'}
+        size="md"
+        className="w-full"
+        icon={state.isCropMode ? <RotateCcw className="w-3.5 h-3.5" /> : <Move className="w-3.5 h-3.5" />}
       >
         {state.isCropMode ? 'Exit Crop Mode' : 'Enter Crop Mode'}
-      </button>
-      <p className="text-xs text-ve-muted mt-2">
-        Enter crop mode and drag the crop region on the video.
+      </PremiumButton>
+      <p className="text-xs text-ve-muted leading-relaxed mt-2">
+        Enter crop mode and drag the crop region on the video preview.
       </p>
       {state.isCropActive && (
-        <div className="space-y-1 mt-3">
-          <Row label="X">{state.cropX}px</Row>
-          <Row label="Y">{state.cropY}px</Row>
-          <Row label="W">{state.cropWidth}px</Row>
-          <Row label="H">{state.cropHeight}px</Row>
+        <div className="space-y-2 mt-3 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/[0.06]">
+          <FieldRow label="X">{state.cropX}px</FieldRow>
+          <FieldRow label="Y">{state.cropY}px</FieldRow>
+          <FieldRow label="W">{state.cropWidth}px</FieldRow>
+          <FieldRow label="H">{state.cropHeight}px</FieldRow>
         </div>
       )}
     </>
@@ -131,26 +144,19 @@ function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Part
 function WatermarkPanel({ state, onChange }: { state: EditorState; onChange: (p: Partial<EditorState>) => void }) {
   return (
     <>
-      <SectionHeader>Watermark</SectionHeader>
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={state.watermarkEnabled}
-          onChange={e => onChange({ watermarkEnabled: e.target.checked })}
-          className="accent-ve-accent"
-        />
-        <span className="text-xs text-ve-text">Enable watermark</span>
-      </label>
+      <SectionLabel>Watermark</SectionLabel>
+      <PremiumToggle
+        checked={state.watermarkEnabled}
+        onChange={checked => onChange({ watermarkEnabled: checked })}
+        label="Enable watermark"
+      />
       {state.watermarkEnabled && (
-        <div className="mt-3 space-y-2">
-          <SectionHeader>Text</SectionHeader>
-          <input
-            type="text"
+        <div className="mt-4">
+          <PremiumInput
+            label="Text"
             value={state.watermarkText}
             onChange={e => onChange({ watermarkText: e.target.value })}
             placeholder="Watermark text…"
-            className="w-full bg-ve-elevated text-ve-text text-xs rounded-md px-3 py-2
-                       border border-ve-border focus:outline-none focus:border-ve-accent placeholder:text-ve-muted"
           />
         </div>
       )}
@@ -161,56 +167,35 @@ function WatermarkPanel({ state, onChange }: { state: EditorState; onChange: (p:
 function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange: (p: Partial<EditorState>) => void }) {
   return (
     <>
-      <SectionHeader>Export Settings</SectionHeader>
+      <SectionLabel>Export Settings</SectionLabel>
 
-      {/* Format */}
-      <div className="space-y-1">
-        <p className="text-[11px] text-ve-secondary">Format</p>
-        <select
-          value={state.outputFormat}
-          onChange={e => onChange({ outputFormat: e.target.value as OutputFormat })}
-          className="w-full bg-ve-elevated text-ve-text text-xs rounded-md px-3 py-2
-                     border border-ve-border focus:outline-none focus:border-ve-accent"
-        >
-          {OUTPUT_FORMATS.map(f => (
-            <option key={f} value={f}>{f}</option>
-          ))}
-        </select>
-      </div>
+      <PremiumSelect
+        label="Format"
+        value={state.outputFormat}
+        onChange={e => onChange({ outputFormat: e.target.value as OutputFormat })}
+        options={OUTPUT_FORMATS.map(f => ({ value: f, label: f }))}
+      />
 
-      {/* FPS */}
-      <div className="space-y-1">
-        <div className="flex justify-between">
-          <p className="text-[11px] text-ve-secondary">Frame Rate</p>
-          <span className="text-[11px] font-mono text-ve-text">{state.fps} fps</span>
-        </div>
-        <input
-          type="range"
-          min={1}
-          max={60}
-          step={1}
-          value={state.fps}
-          onChange={e => onChange({ fps: parseInt(e.target.value) })}
-          className="w-full"
-        />
-      </div>
+      <PremiumSlider
+        label="Frame Rate"
+        displayValue={`${state.fps} fps`}
+        min={1}
+        max={60}
+        step={1}
+        value={state.fps}
+        onChange={e => onChange({ fps: parseInt(e.target.value) })}
+      />
 
-      {/* Quality Scale */}
-      <div className="space-y-1">
-        <div className="flex justify-between">
-          <p className="text-[11px] text-ve-secondary">Quality Scale</p>
-          <span className="text-[11px] font-mono text-ve-text">{Math.round(state.qualityScale * 100)}%</span>
-        </div>
-        <input
-          type="range"
-          min={0.25}
-          max={1}
-          step={0.05}
-          value={state.qualityScale}
-          onChange={e => onChange({ qualityScale: parseFloat(e.target.value) })}
-          className="w-full"
-        />
-      </div>
+      <PremiumSlider
+        label="Quality Scale"
+        displayValue={`${Math.round(state.qualityScale * 100)}%`}
+        min={0.25}
+        max={1}
+        step={0.05}
+        value={state.qualityScale}
+        onChange={e => onChange({ qualityScale: parseFloat(e.target.value) })}
+      />
     </>
   )
 }
+

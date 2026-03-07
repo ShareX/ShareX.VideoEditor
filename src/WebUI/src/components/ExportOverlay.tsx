@@ -1,3 +1,6 @@
+import { X, Loader2 } from 'lucide-react'
+import { PremiumButton, PremiumIconButton } from './ui'
+
 interface ExportOverlayProps {
   progress: number
   message: string
@@ -6,32 +9,72 @@ interface ExportOverlayProps {
 
 export default function ExportOverlay({ progress, message, onCancel }: ExportOverlayProps) {
   return (
-    <div className="absolute inset-0 bg-ve-base/80 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="absolute inset-0 bg-ve-base/80 backdrop-blur-md flex items-center justify-center z-50">
       <div
-        className="ve-overlay-card bg-ve-surface border border-ve-border rounded-2xl p-8 w-80 flex flex-col items-center gap-5 shadow-2xl"
+        className="
+          animate-scale-in
+          ve-glass-heavy rounded-3xl
+          ring-1 ring-white/[0.08]
+          shadow-glass-lg
+          p-8 w-[340px]
+          flex flex-col items-center gap-6
+        "
         role="dialog"
         aria-modal="true"
         aria-label="Export progress"
       >
-        <p className="text-lg font-bold text-ve-text tracking-tight">Exporting…</p>
-
-        {/* Progress bar */}
-        <div className="w-full h-1.5 bg-ve-border rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-          <div
-            className="h-full bg-ve-accent ve-progress-active rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+        {/* Animated icon */}
+        <div className="w-14 h-14 rounded-2xl bg-ve-accent/15 ring-1 ring-amber-400/30 shadow-glow-amber flex items-center justify-center">
+          <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
         </div>
 
-        <p className="text-sm text-ve-secondary text-center" aria-live="polite">{message}</p>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-lg font-semibold text-ve-text tracking-tight">Exporting…</p>
+          <p className="text-xs text-ve-secondary">{message}</p>
+        </div>
 
-        <button
+        {/* Progress bar */}
+        <div className="w-full space-y-2">
+          <div
+            className="w-full h-2 bg-ve-elevated rounded-full overflow-hidden ring-1 ring-white/[0.06]"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300 shadow-glow-amber-sm animate-pulse-soft"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[11px] font-mono text-ve-muted tracking-tighter">{Math.round(progress)}%</span>
+            <span className="text-[11px] text-ve-muted">Please wait…</span>
+          </div>
+        </div>
+
+        {/* Cancel */}
+        <div className="flex items-center gap-2">
+          <PremiumButton
+            onClick={onCancel}
+            variant="ghost"
+            size="sm"
+            icon={<X className="w-3.5 h-3.5" />}
+          >
+            Cancel
+          </PremiumButton>
+        </div>
+
+        {/* Close corner button */}
+        <PremiumIconButton
           onClick={onCancel}
-          className="px-5 py-1.5 text-xs font-medium rounded-md border border-ve-border
-                     text-ve-secondary hover:text-ve-text hover:border-ve-secondary transition-colors"
+          size="sm"
+          variant="ghost"
+          className="absolute top-4 right-4"
+          aria-label="Cancel export"
         >
-          Cancel
-        </button>
+          <X className="w-4 h-4" />
+        </PremiumIconButton>
       </div>
     </div>
   )
