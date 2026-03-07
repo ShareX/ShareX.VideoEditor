@@ -110,6 +110,34 @@
   </Style>
 
   <!-- ═══════════════════════════════════════════
+       BUTTON TEMPLATE (shared by all ve-* classes)
+       A self-contained template so VE buttons look
+       consistent regardless of the host app's theme
+       (FluentTheme, FluentAvalonia, etc.).
+       ═══════════════════════════════════════════ -->
+
+  <Style Selector="Button.ve-primary, Button.ve-ghost, Button.ve-transport, Button.ve-play, Button.ve-tab">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="VE_Root"
+                Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="VE_Content"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Foreground="{TemplateBinding Foreground}"
+                            FontFamily="{TemplateBinding FontFamily}"
+                            FontSize="{TemplateBinding FontSize}"
+                            FontWeight="{TemplateBinding FontWeight}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <!-- ═══════════════════════════════════════════
        BUTTON STYLES (class-based)
        ═══════════════════════════════════════════ -->
 
@@ -124,10 +152,10 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="Button.ve-primary:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.ve-primary:pointerover /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_AccentDark}" />
   </Style>
-  <Style Selector="Button.ve-primary:pressed /template/ ContentPresenter">
+  <Style Selector="Button.ve-primary:pressed /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_AccentPressed}" />
   </Style>
   <Style Selector="Button.ve-primary:disabled">
@@ -143,13 +171,13 @@
     <Setter Property="CornerRadius" Value="{StaticResource VE_RadiusSM}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="Button.ve-ghost:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.ve-ghost:pointerover /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
   </Style>
-  <Style Selector="Button.ve-ghost:pointerover">
+  <Style Selector="Button.ve-ghost:pointerover /template/ ContentPresenter#VE_Content">
     <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
   </Style>
-  <Style Selector="Button.ve-ghost:pressed /template/ ContentPresenter">
+  <Style Selector="Button.ve-ghost:pressed /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_Border}" />
   </Style>
 
@@ -164,10 +192,10 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="Button.ve-transport:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.ve-transport:pointerover /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
   </Style>
-  <Style Selector="Button.ve-transport:pressed /template/ ContentPresenter">
+  <Style Selector="Button.ve-transport:pressed /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_Border}" />
   </Style>
   <Style Selector="Button.ve-transport:disabled">
@@ -185,10 +213,10 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="Button.ve-play:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.ve-play:pointerover /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_AccentDark}" />
   </Style>
-  <Style Selector="Button.ve-play:pressed /template/ ContentPresenter">
+  <Style Selector="Button.ve-play:pressed /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_AccentPressed}" />
   </Style>
 
@@ -202,10 +230,10 @@
     <Setter Property="CornerRadius" Value="{StaticResource VE_RadiusSM}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="Button.ve-tab:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.ve-tab:pointerover /template/ Border#VE_Root">
     <Setter Property="Background" Value="{StaticResource VE_SurfaceHover}" />
   </Style>
-  <Style Selector="Button.ve-tab:pointerover">
+  <Style Selector="Button.ve-tab:pointerover /template/ ContentPresenter#VE_Content">
     <Setter Property="Foreground" Value="{StaticResource VE_Text}" />
   </Style>
 
