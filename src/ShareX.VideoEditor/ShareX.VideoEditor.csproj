@@ -8,6 +8,7 @@
     <AssemblyName>ShareX.VideoEditor</AssemblyName>
     <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
     <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
+    <WebUIDistDir>$(MSBuildProjectDirectory)/../WebUI/dist</WebUIDistDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,15 +28,39 @@
     <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
   </Target>
 
-  <!-- Copy compiled WebUI dist/ next to the output DLL so the host can find it.   -->
-  <!-- Destination must be $(OutputPath)WebUI/dist/… to match ResolveWebUiPath(). -->
-  <Target Name="CopyWebUIDist" AfterTargets="Build">
-    <ItemGroup>
-      <WebUIDistFiles Include="$(MSBuildProjectDirectory)/../WebUI/dist/**/*" />
+  <!-- ── Declare WebUI dist files as Content so they copy transitively ─────────
+       MSBuild propagates <Content CopyToOutputDirectory> through project
+       references, so any consuming app (XerahS.App, ShareX, etc.) gets
+       WebUI/dist/ placed alongside its own output DLL automatically.
+       The ItemGroup lives inside a Target so globs are evaluated at
+       target-execution time (after npm produced the dist on a first build).
+       Vite output is flat: index.html + assets/*.{js,css,map,…}.
+       We use *.* (require extension) rather than * to exclude directories. -->
+  <Target Name="IncludeWebUIContent" AfterTargets="BuildWebUI" BeforeTargets="AssignTargetPaths">
+    <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
+      <Content Include="$(WebUIDistDir)/index.html">
+        <Link>WebUI/dist/index.html</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Include="$(WebUIDistDir)/assets/*.*">
+        <Link>WebUI/dist/assets/%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
     </ItemGroup>
-    <Copy SourceFiles="@(WebUIDistFiles)"
-          DestinationFolder="$(OutputPath)WebUI/dist/%(RecursiveDir)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(MSBuildProjectDirectory)/../WebUI/dist')" />
+  </Target>
+
+  <!-- Same registration when BuildWebUI is skipped (dist already exists). -->
+  <Target Name="IncludeWebUIContentFallback" BeforeTargets="AssignTargetPaths"
+          Condition="'$(BuildWebUI)' != 'true'">
+    <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
+      <Content Include="$(WebUIDistDir)/index.html">
+        <Link>WebUI/dist/index.html</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Include="$(WebUIDistDir)/assets/*.*">
+        <Link>WebUI/dist/assets/%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
   </Target>
 </Project>
