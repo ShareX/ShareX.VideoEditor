@@ -2,7 +2,6 @@ import {
   Scissors, Crop, Type, Settings,
   Move, RotateCcw, Download,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
 import type { ActivePanel, EditorState, OutputFormat } from '../types/bridge'
 import {
   PremiumButton, PremiumInput, PremiumSelect,
