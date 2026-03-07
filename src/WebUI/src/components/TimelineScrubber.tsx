@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { formatTime } from '../utils/time'
+import { PremiumButton } from './ui'
 
 interface TimelineScrubberProps {
   duration: number
@@ -87,11 +88,11 @@ export default function TimelineScrubber({
   const effectiveTrimEnd = isTrimActive ? trimEnd : duration
 
   return (
-    <div className="bg-ve-track px-4 pt-3 pb-2 shrink-0 select-none">
-      {/* Track */}
+    <div className="bg-ve-track/80 backdrop-blur-sm px-5 pt-3 pb-2.5 shrink-0 select-none border-t border-white/[0.04]">
+      {/* Track container */}
       <div
         ref={trackRef}
-        className="relative h-14 rounded-md overflow-hidden cursor-pointer bg-ve-base"
+        className="relative h-14 rounded-2xl overflow-hidden cursor-pointer bg-ve-base ring-1 ring-white/[0.06] shadow-inner-highlight"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -114,7 +115,7 @@ export default function TimelineScrubber({
         {/* Trim region highlight */}
         {isTrimActive && (
           <div
-            className="absolute top-0 bottom-0 bg-ve-accent/20 border-x-0"
+            className="absolute top-0 bottom-0 bg-amber-400/15 border-x-0"
             style={{ left: frac(effectiveTrimStart), width: `calc(${frac(effectiveTrimEnd)} - ${frac(effectiveTrimStart)})` }}
           />
         )}
@@ -122,7 +123,7 @@ export default function TimelineScrubber({
         {/* Trim start handle */}
         {isTrimActive && (
           <div
-            className="absolute top-0 bottom-0 w-1.5 bg-ve-accent rounded-sm cursor-ew-resize"
+            className="absolute top-0 bottom-0 w-1.5 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm"
             style={{ left: frac(effectiveTrimStart), transform: 'translateX(-50%)' }}
           />
         )}
@@ -130,60 +131,66 @@ export default function TimelineScrubber({
         {/* Trim end handle */}
         {isTrimActive && (
           <div
-            className="absolute top-0 bottom-0 w-1.5 bg-ve-accent rounded-sm cursor-ew-resize"
+            className="absolute top-0 bottom-0 w-1.5 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm"
             style={{ left: frac(effectiveTrimEnd), transform: 'translateX(-50%)' }}
           />
         )}
 
         {/* Playhead */}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-white"
+          className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_6px_rgba(255,255,255,0.4)]"
           style={{ left: frac(position), transform: 'translateX(-50%)' }}
         >
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white rotate-45" />
+          <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-sm rotate-45 shadow-depth" />
         </div>
       </div>
 
       {/* Footer row */}
-      <div className="flex items-center justify-between mt-2">
+      <div className="flex items-center justify-between mt-2.5">
         <div className="flex items-center gap-4">
           {isTrimActive && (
             <>
-              <span className="text-[11px] text-ve-muted font-mono">
-                IN <span className="text-ve-accent">{formatTime(effectiveTrimStart)}</span>
+              <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
+                IN <span className="text-amber-400">{formatTime(effectiveTrimStart)}</span>
               </span>
-              <span className="text-[11px] text-ve-muted font-mono">
-                OUT <span className="text-ve-accent">{formatTime(effectiveTrimEnd)}</span>
+              <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
+                OUT <span className="text-amber-400">{formatTime(effectiveTrimEnd)}</span>
               </span>
-              <span className="text-[11px] text-ve-muted font-mono">
+              <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
                 DUR <span className="text-ve-secondary">{formatTime(effectiveTrimEnd - effectiveTrimStart)}</span>
               </span>
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
+        <div className="flex items-center gap-1.5">
+          <PremiumButton
             onClick={onSetTrimStart}
-            className="px-2 py-0.5 text-[11px] font-mono rounded bg-ve-elevated hover:bg-ve-border text-ve-secondary hover:text-ve-text transition-colors"
+            variant="ghost"
+            size="sm"
+            className="!h-7 !px-2.5 !text-[11px] font-mono"
             title="Set trim In point (I)"
           >
             [ Set In
-          </button>
-          <button
+          </PremiumButton>
+          <PremiumButton
             onClick={onSetTrimEnd}
-            className="px-2 py-0.5 text-[11px] font-mono rounded bg-ve-elevated hover:bg-ve-border text-ve-secondary hover:text-ve-text transition-colors"
+            variant="ghost"
+            size="sm"
+            className="!h-7 !px-2.5 !text-[11px] font-mono"
             title="Set trim Out point (O)"
           >
             Set Out ]
-          </button>
+          </PremiumButton>
           {isTrimActive && (
-            <button
+            <PremiumButton
               onClick={onResetTrim}
-              className="px-2 py-0.5 text-[11px] rounded bg-ve-elevated hover:bg-ve-border text-ve-muted hover:text-ve-secondary transition-colors"
+              variant="ghost"
+              size="sm"
+              className="!h-7 !px-2.5 !text-[11px] text-ve-muted"
               title="Reset trim"
             >
               Reset
-            </button>
+            </PremiumButton>
           )}
         </div>
       </div>
