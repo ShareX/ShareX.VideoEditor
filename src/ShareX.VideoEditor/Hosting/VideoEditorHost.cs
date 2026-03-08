@@ -269,6 +269,7 @@ internal sealed class VideoEditorSession
             culture = _options.Culture ?? string.Empty,
             ffmpegAvailable = _ffmpegAvailable,
             ffmpegPath = _ffmpegPath,
+            runtimeDiagnostics = VideoEditorRuntimeDiagnosticsCollector.Capture(),
             watermark = _options.WatermarkSettings != null ? new
             {
                 enabled = _options.WatermarkSettings.Enabled,

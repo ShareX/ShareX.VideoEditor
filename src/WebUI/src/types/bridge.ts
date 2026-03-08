@@ -15,6 +15,25 @@ export interface WatermarkConfig {
   fontColor: string
 }
 
+export interface PackageReferenceInfo {
+  name: string
+  version: string
+}
+
+export interface LoadedAssemblyInfo {
+  name: string
+  isLoaded: boolean
+  assemblyVersion: string
+  informationalVersion: string
+  fileVersion: string
+  location: string
+}
+
+export interface RuntimeDiagnosticsSnapshot {
+  packageReferences: PackageReferenceInfo[]
+  loadedAssemblies: LoadedAssemblyInfo[]
+}
+
 export interface ConfigMessage {
   type: 'config'
   videoUrl: string
@@ -23,6 +42,7 @@ export interface ConfigMessage {
   ffmpegAvailable: boolean
   /** Path the host expects for FFmpeg (empty if not set). Shown when ffmpegAvailable is false. */
   ffmpegPath?: string
+  runtimeDiagnostics?: RuntimeDiagnosticsSnapshot | null
   watermark?: WatermarkConfig | null
 }
 
@@ -98,6 +118,7 @@ export interface EditorState {
   videoUrl: string
   ffmpegAvailable: boolean
   ffmpegPath: string
+  runtimeDiagnostics: RuntimeDiagnosticsSnapshot | null
   watermarkConfig: WatermarkConfig | null
   theme: ConfigMessage['theme']
   // Thumbnails

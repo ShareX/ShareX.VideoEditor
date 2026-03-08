@@ -12,6 +12,7 @@ const DEFAULT_STATE: EditorState = {
   videoUrl: '',
   ffmpegAvailable: false,
   ffmpegPath: '',
+  runtimeDiagnostics: null,
   watermarkConfig: null,
   theme: 'Dark',
   thumbnails: [],
@@ -65,6 +66,7 @@ export default function App() {
           theme: msg.theme,
           ffmpegAvailable: msg.ffmpegAvailable,
           ffmpegPath: msg.ffmpegPath ?? '',
+          runtimeDiagnostics: msg.runtimeDiagnostics ?? null,
           watermarkConfig: msg.watermark ?? null,
           watermarkText: msg.watermark?.text ?? '',
           watermarkEnabled: msg.watermark?.enabled ?? false,
@@ -219,6 +221,7 @@ export default function App() {
         exportStatusMessage={state.exportStatusMessage}
         ffmpegAvailable={state.ffmpegAvailable}
         ffmpegPath={state.ffmpegPath}
+        runtimeDiagnostics={state.runtimeDiagnostics}
         onExport={requestExport}
       />
 
