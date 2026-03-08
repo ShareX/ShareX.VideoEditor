@@ -33,6 +33,7 @@ public class WatermarkSettings
 {
     public bool Enabled { get; set; } = false;
     public string Text { get; set; } = string.Empty;
+    /// <summary>Path to an image file for image watermark. Not yet applied during export; only text watermark is used by the FFmpeg pipeline.</summary>
     public string ImagePath { get; set; } = string.Empty;
 
     /// <summary>Opacity: 0.0 (transparent) to 1.0 (opaque).</summary>
