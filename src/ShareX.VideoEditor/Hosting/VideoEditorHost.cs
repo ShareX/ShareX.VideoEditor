@@ -240,6 +240,7 @@ internal sealed class VideoEditorSession
             theme = _options.Theme,
             culture = _options.Culture ?? string.Empty,
             ffmpegAvailable = !string.IsNullOrWhiteSpace(_options.FFmpegPath) && File.Exists(_options.FFmpegPath),
+            ffmpegPath = _options.FFmpegPath ?? string.Empty,
             watermark = _options.WatermarkSettings != null ? new
             {
                 enabled = _options.WatermarkSettings.Enabled,

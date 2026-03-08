@@ -21,6 +21,8 @@ export interface ConfigMessage {
   theme: 'Dark' | 'Light' | 'System'
   culture: string
   ffmpegAvailable: boolean
+  /** Path the host expects for FFmpeg (empty if not set). Shown when ffmpegAvailable is false. */
+  ffmpegPath?: string
   watermark?: WatermarkConfig | null
 }
 
@@ -95,6 +97,7 @@ export type ActivePanel = 'trim' | 'crop' | 'watermark' | 'export'
 export interface EditorState {
   videoUrl: string
   ffmpegAvailable: boolean
+  ffmpegPath: string
   watermarkConfig: WatermarkConfig | null
   theme: ConfigMessage['theme']
   // Thumbnails

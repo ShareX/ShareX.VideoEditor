@@ -7,6 +7,7 @@ interface HeaderProps {
   exportProgress: number
   exportStatusMessage: string
   ffmpegAvailable: boolean
+  ffmpegPath: string
   onExport: () => void
 }
 
@@ -16,6 +17,7 @@ export default function Header({
   exportProgress,
   exportStatusMessage,
   ffmpegAvailable,
+  ffmpegPath,
   onExport,
 }: HeaderProps) {
   const fileName = videoPath ? videoPath.split('/').pop()?.split('\\').pop() ?? videoPath : ''
@@ -67,10 +69,20 @@ export default function Header({
       {/* Right actions */}
       <div className="flex items-center gap-2.5">
         {!ffmpegAvailable && (
-          <GlassPill className="h-7 px-3 gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-[11px] text-amber-400 font-medium">FFmpeg not found</span>
-          </GlassPill>
+          <div className="flex items-center gap-2 min-w-0 max-w-md">
+            <GlassPill className="h-7 px-3 gap-1.5 shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[11px] text-amber-400 font-medium">FFmpeg not found</span>
+            </GlassPill>
+            <input
+              type="text"
+              readOnly
+              value={ffmpegPath || '(not set)'}
+              className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/[0.06] border-0 cursor-text select-text"
+              title="Expected FFmpeg path (read-only, select to copy)"
+              aria-label="Expected FFmpeg path"
+            />
+          </div>
         )}
         <PremiumButton
           onClick={onExport}

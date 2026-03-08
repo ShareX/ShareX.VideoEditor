@@ -11,6 +11,7 @@ import ExportOverlay from './components/ExportOverlay'
 const DEFAULT_STATE: EditorState = {
   videoUrl: '',
   ffmpegAvailable: false,
+  ffmpegPath: '',
   watermarkConfig: null,
   theme: 'Dark',
   thumbnails: [],
@@ -63,6 +64,7 @@ export default function App() {
           videoUrl: msg.videoUrl,
           theme: msg.theme,
           ffmpegAvailable: msg.ffmpegAvailable,
+          ffmpegPath: msg.ffmpegPath ?? '',
           watermarkConfig: msg.watermark ?? null,
           watermarkText: msg.watermark?.text ?? '',
           watermarkEnabled: msg.watermark?.enabled ?? false,
@@ -216,6 +218,7 @@ export default function App() {
         exportProgress={state.exportProgress}
         exportStatusMessage={state.exportStatusMessage}
         ffmpegAvailable={state.ffmpegAvailable}
+        ffmpegPath={state.ffmpegPath}
         onExport={requestExport}
       />
 
