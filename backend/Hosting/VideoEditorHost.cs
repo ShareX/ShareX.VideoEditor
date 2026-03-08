@@ -52,6 +52,37 @@ public static class VideoEditorHost
     /// </summary>
     public static void ShowEditor(VideoEditorOptions options, VideoEditorEvents? events = null)
     {
+        _ = StartEditorThread(options, events);
+    }
+
+    /// <summary>
+    /// Opens the video editor and blocks the calling thread until the editor window closes.
+    /// Returns the path of the exported file, or <c>null</c> if the user cancelled.
+    /// </summary>
+    public static string? ShowEditorDialog(VideoEditorOptions options, VideoEditorEvents? events = null)
+    {
+        string? exportedPath = null;
+
+        var wrappedEvents = new VideoEditorEvents
+        {
+            ExportCompleted = path =>
+            {
+                exportedPath = path;
+                try { events?.ExportCompleted?.Invoke(path); } catch { }
+            },
+            ExportFailed = ex => { try { events?.ExportFailed?.Invoke(ex); } catch { } },
+            EditorClosed = () => { try { events?.EditorClosed?.Invoke(); } catch { } },
+            DiagnosticReported = evt => { try { events?.DiagnosticReported?.Invoke(evt); } catch { } }
+        };
+
+        Thread thread = StartEditorThread(options, wrappedEvents);
+        // Wait for the session thread to fully unwind so a follow-up open cannot race native teardown.
+        thread.Join();
+        return exportedPath;
+    }
+
+    private static Thread StartEditorThread(VideoEditorOptions options, VideoEditorEvents? events)
+    {
         ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(options.VideoPath))
             throw new ArgumentException("VideoEditorOptions.VideoPath must be set.", nameof(options));
@@ -84,36 +115,7 @@ public static class VideoEditorHost
             thread.SetApartmentState(ApartmentState.STA);
 
         thread.Start();
-    }
-
-    /// <summary>
-    /// Opens the video editor and blocks the calling thread until the editor window closes.
-    /// Returns the path of the exported file, or <c>null</c> if the user cancelled.
-    /// </summary>
-    public static string? ShowEditorDialog(VideoEditorOptions options, VideoEditorEvents? events = null)
-    {
-        string? exportedPath = null;
-        var done = new ManualResetEventSlim(false);
-
-        var wrappedEvents = new VideoEditorEvents
-        {
-            ExportCompleted = path =>
-            {
-                exportedPath = path;
-                try { events?.ExportCompleted?.Invoke(path); } catch { }
-            },
-            ExportFailed = ex => { try { events?.ExportFailed?.Invoke(ex); } catch { } },
-            EditorClosed = () =>
-            {
-                try { events?.EditorClosed?.Invoke(); } catch { }
-                done.Set();
-            },
-            DiagnosticReported = evt => { try { events?.DiagnosticReported?.Invoke(evt); } catch { } }
-        };
-
-        ShowEditor(options, wrappedEvents);
-        done.Wait();
-        return exportedPath;
+        return thread;
     }
 }
 
