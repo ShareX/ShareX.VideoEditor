@@ -433,7 +433,7 @@ internal sealed class VideoEditorSession
         string defaultCandidate = Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
 
         throw new FileNotFoundException(
-            "WebUI dist not found. Run 'npm run build' inside src/WebUI first.", defaultCandidate);
+            "WebUI dist not found. Run 'npm run build' inside WebUI first.", defaultCandidate);
     }
 
     private static IEnumerable<string> EnumerateWebUiCandidates(string assemblyDir)
@@ -448,8 +448,7 @@ internal sealed class VideoEditorSession
                 yield break;
 
             yield return Path.Combine(dir, "WebUI", "dist", "index.html");
-            yield return Path.Combine(dir, "src", "WebUI", "dist", "index.html");
-            yield return Path.Combine(dir, "ShareX.VideoEditor", "src", "WebUI", "dist", "index.html");
+            yield return Path.Combine(dir, "ShareX.VideoEditor", "WebUI", "dist", "index.html");
         }
     }
 
