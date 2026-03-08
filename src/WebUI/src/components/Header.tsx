@@ -79,7 +79,7 @@ export default function Header({
               readOnly
               value={ffmpegPath || '(not set)'}
               className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/[0.06] border-0 cursor-text select-text"
-              title="Expected FFmpeg path (read-only, select to copy)"
+              title={ffmpegPath ? 'Expected FFmpeg path (read-only, select to copy)' : 'Host did not find FFmpeg. Try: Documents\\XerahS\\Tools\\win-x64\\ffmpeg.exe (Windows) or add FFmpeg to PATH.'}
               aria-label="Expected FFmpeg path"
             />
           </div>

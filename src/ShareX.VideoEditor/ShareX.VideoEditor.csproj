@@ -30,13 +30,14 @@
 
   <!-- ── Declare WebUI dist files as Content so they copy transitively ─────────
        MSBuild propagates <Content CopyToOutputDirectory> through project
-       references, so any consuming app (XerahS.App, ShareX, etc.) gets
-       WebUI/dist/ placed alongside its own output DLL automatically.
-       The ItemGroup lives inside a Target so globs are evaluated at
-       target-execution time (after npm produced the dist on a first build).
-       Vite output is flat: index.html + assets/*.{js,css,map,…}.
-       We use *.* (require extension) rather than * to exclude directories. -->
+       references. The ItemGroup lives inside a Target so globs are evaluated
+       at target-execution time (after npm produced the dist). Vite output is
+       flat: index.html + assets/*.{js,css,…} with content-hashed names, so we
+       must re-glob every build and clear any stale Content from previous builds. -->
   <Target Name="IncludeWebUIContent" AfterTargets="BuildWebUI" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <Content Remove="@(Content)" Condition="'%(Content.Link)' != '' and $([System.String]::Copy('%(Content.Link)').StartsWith('WebUI/dist'))" />
+    </ItemGroup>
     <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
       <Content Include="$(WebUIDistDir)/index.html">
         <Link>WebUI/dist/index.html</Link>
@@ -52,6 +53,9 @@
   <!-- Same registration when BuildWebUI is skipped (dist already exists). -->
   <Target Name="IncludeWebUIContentFallback" BeforeTargets="AssignTargetPaths"
           Condition="'$(BuildWebUI)' != 'true'">
+    <ItemGroup>
+      <Content Remove="@(Content)" Condition="'%(Content.Link)' != '' and $([System.String]::Copy('%(Content.Link)').StartsWith('WebUI/dist'))" />
+    </ItemGroup>
     <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
       <Content Include="$(WebUIDistDir)/index.html">
         <Link>WebUI/dist/index.html</Link>
