@@ -127,6 +127,8 @@ internal sealed class VideoEditorSession
 
     private readonly VideoEditorOptions _options;
     private readonly VideoEditorEvents? _events;
+    private readonly string _ffmpegPath;
+    private readonly bool _ffmpegAvailable;
 
     private PhotinoWindow? _window;
     private CancellationTokenSource? _exportCts;
@@ -136,6 +138,8 @@ internal sealed class VideoEditorSession
     {
         _options = options;
         _events = events;
+        _ffmpegPath = NormalizeExecutablePath(options.FFmpegPath);
+        _ffmpegAvailable = !string.IsNullOrWhiteSpace(_ffmpegPath) && File.Exists(_ffmpegPath);
     }
 
     // ── Entry point ───────────────────────────────────────────────────────────
@@ -233,14 +237,28 @@ internal sealed class VideoEditorSession
         // The video is served via the custom scheme; build the URL the WebView will use.
         string videoUrl = $"{MediaScheme}://host/video";
 
+        if (_ffmpegAvailable)
+        {
+            VideoEditorServices.ReportInformation(
+                nameof(VideoEditorSession),
+                $"Using FFmpeg path '{_ffmpegPath}'.");
+        }
+        else
+        {
+            string configuredPath = string.IsNullOrWhiteSpace(_ffmpegPath) ? "(not set)" : _ffmpegPath;
+            VideoEditorServices.ReportWarning(
+                nameof(VideoEditorSession),
+                $"FFmpeg is unavailable. Configured path: {configuredPath}");
+        }
+
         Send(new
         {
             type = "config",
             videoUrl,
             theme = _options.Theme,
             culture = _options.Culture ?? string.Empty,
-            ffmpegAvailable = !string.IsNullOrWhiteSpace(_options.FFmpegPath) && File.Exists(_options.FFmpegPath),
-            ffmpegPath = _options.FFmpegPath ?? string.Empty,
+            ffmpegAvailable = _ffmpegAvailable,
+            ffmpegPath = _ffmpegPath,
             watermark = _options.WatermarkSettings != null ? new
             {
                 enabled = _options.WatermarkSettings.Enabled,
@@ -259,7 +277,7 @@ internal sealed class VideoEditorSession
 
     private void StartThumbnailExtraction()
     {
-        if (string.IsNullOrWhiteSpace(_options.FFmpegPath) || !File.Exists(_options.FFmpegPath))
+        if (!_ffmpegAvailable)
         {
             VideoEditorServices.ReportWarning(nameof(VideoEditorSession),
                 "FFmpegPath is not set or does not exist — thumbnails will not be generated.");
@@ -275,7 +293,7 @@ internal sealed class VideoEditorSession
         {
             try
             {
-                var extractor = new ThumbnailExtractor(_options.FFmpegPath);
+                var extractor = new ThumbnailExtractor(_ffmpegPath);
                 var frames = await extractor.ExtractThumbnailsAsync(
                     _options.VideoPath, count: 24, cancellationToken: token);
 
@@ -293,6 +311,14 @@ internal sealed class VideoEditorSession
 
     private void HandleExportRequest(ExportPayload payload)
     {
+        if (!_ffmpegAvailable)
+        {
+            VideoEditorServices.ReportWarning(nameof(VideoEditorSession),
+                "Export requested without an available FFmpeg path.");
+            Send(new { type = "exportError", message = "FFmpeg is not available." });
+            return;
+        }
+
         // Show a native save dialog synchronously on the Photino (UI) thread
         string ext = GetExtension(payload.OutputFormat);
         string? outputPath = _window?.ShowSaveFile(
@@ -310,7 +336,7 @@ internal sealed class VideoEditorSession
             try
             {
                 var exportOptions = BuildExportOptions(payload, outputPath);
-                var service = new VideoExportService(_options.FFmpegPath);
+                var service = new VideoExportService(_ffmpegPath);
 
                 await service.ExportAsync(
                     exportOptions,
@@ -394,6 +420,25 @@ internal sealed class VideoEditorSession
             yield return Path.Combine(dir, "WebUI", "dist", "index.html");
             yield return Path.Combine(dir, "src", "WebUI", "dist", "index.html");
             yield return Path.Combine(dir, "ShareX.VideoEditor", "src", "WebUI", "dist", "index.html");
+        }
+    }
+
+    private static string NormalizeExecutablePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+
+        string normalizedPath = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"', '\''));
+        if (string.IsNullOrWhiteSpace(normalizedPath))
+            return string.Empty;
+
+        try
+        {
+            return Path.GetFullPath(normalizedPath);
+        }
+        catch
+        {
+            return normalizedPath;
         }
     }
 
