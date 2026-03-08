@@ -5,7 +5,7 @@ import type { InboundMessage, OutboundMessage } from '../types/bridge'
  * Thin wrapper around the Photino.NET web-message bridge.
  *
  * JS → C#  :  `window.external.sendMessage(json)`
- * C# → JS  :  `window.external.receiveMessage = handler`
+ * C# → JS  :  `window.external.receiveMessage(handler)`
  *
  * The DOM `Window.external` type conflicts with our Photino shape, so we
  * access the bridge via a typed `any` cast to avoid redeclaration errors.
@@ -41,8 +41,16 @@ export function useReceive(handler: (msg: InboundMessage) => void) {
       }
     }
 
-    if (!win.external) win.external = {}
-    win.external.receiveMessage = onMessage
+    if (!win.external) {
+      win.external = {}
+    }
+
+    // Photino registers inbound messages via a function call; keep assignment as a fallback.
+    if (typeof win.external.receiveMessage === 'function') {
+      win.external.receiveMessage(onMessage)
+    } else {
+      win.external.receiveMessage = onMessage
+    }
 
     return () => {
       if (win.external?.receiveMessage === onMessage) {
