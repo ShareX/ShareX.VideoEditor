@@ -10,6 +10,7 @@ interface VideoPlayerProps {
   isCropMode: boolean
   onDurationChange: () => void
   onTimeUpdate: () => void
+  onPlaybackStateChange: () => void
   onCancelExport: () => void
 }
 
@@ -20,6 +21,7 @@ export default function VideoPlayer({
   isCropMode,
   onDurationChange,
   onTimeUpdate,
+  onPlaybackStateChange,
 }: VideoPlayerProps) {
   return (
     <div className="relative flex-1 min-h-0 bg-ve-base flex items-center justify-center overflow-hidden">
@@ -30,7 +32,9 @@ export default function VideoPlayer({
           className="max-w-full max-h-full object-contain"
           onDurationChange={onDurationChange}
           onTimeUpdate={onTimeUpdate}
-          onEnded={() => {}}
+          onPlay={onPlaybackStateChange}
+          onPause={onPlaybackStateChange}
+          onEnded={onPlaybackStateChange}
           onContextMenu={e => e.preventDefault()}
         />
       ) : (

@@ -132,17 +132,37 @@ export default function App() {
     if (vid) setState(s => ({ ...s, position: vid.currentTime }))
   }, [])
 
+  const syncPlaybackState = useCallback(() => {
+    const vid = videoRef.current
+    if (!vid) return
+
+    const isPlaying = !vid.paused && !vid.ended
+    const position = isFinite(vid.currentTime) ? vid.currentTime : 0
+
+    setState(s => {
+      if (s.isPlaying === isPlaying && s.position === position) {
+        return s
+      }
+
+      return {
+        ...s,
+        isPlaying,
+        position,
+      }
+    })
+  }, [])
+
   // ── Playback controls ───────────────────────────────────────────────────────
 
   const togglePlayPause = useCallback(() => {
     const vid = videoRef.current
     if (!vid) return
     if (vid.paused) {
-      vid.play().catch(() => {})
-      setState(s => ({ ...s, isPlaying: true }))
+      vid.play().catch(() => {
+        setState(s => ({ ...s, isPlaying: false }))
+      })
     } else {
       vid.pause()
-      setState(s => ({ ...s, isPlaying: false }))
     }
   }, [])
 
@@ -236,6 +256,7 @@ export default function App() {
             isCropMode={state.isCropMode}
             onDurationChange={onVideoDurationChange}
             onTimeUpdate={onVideoTimeUpdate}
+            onPlaybackStateChange={syncPlaybackState}
             onCancelExport={cancelExport}
           />
 
