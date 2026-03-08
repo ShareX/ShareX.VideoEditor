@@ -46,6 +46,13 @@ public class VideoEditorOptions
     public string FFmpegPath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Absolute path to the FFprobe executable.
+    /// Optional, but enables probe-aware host operations such as exact headless trim workflows.
+    /// The host application is responsible for resolving or downloading FFprobe.
+    /// </summary>
+    public string FFprobePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Theme variant: "Dark", "Light", or "System".
     /// Defaults to "Dark" (Premium Dark Mode).
     /// </summary>

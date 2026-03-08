@@ -129,6 +129,8 @@ internal sealed class VideoEditorSession
     private readonly VideoEditorEvents? _events;
     private readonly string _ffmpegPath;
     private readonly bool _ffmpegAvailable;
+    private readonly string _ffprobePath;
+    private readonly bool _ffprobeAvailable;
 
     private PhotinoWindow? _window;
     private CancellationTokenSource? _exportCts;
@@ -140,6 +142,8 @@ internal sealed class VideoEditorSession
         _events = events;
         _ffmpegPath = NormalizeExecutablePath(options.FFmpegPath);
         _ffmpegAvailable = !string.IsNullOrWhiteSpace(_ffmpegPath) && File.Exists(_ffmpegPath);
+        _ffprobePath = NormalizeExecutablePath(options.FFprobePath);
+        _ffprobeAvailable = !string.IsNullOrWhiteSpace(_ffprobePath) && File.Exists(_ffprobePath);
     }
 
     // ── Entry point ───────────────────────────────────────────────────────────
@@ -261,6 +265,19 @@ internal sealed class VideoEditorSession
                 $"FFmpeg is unavailable. Configured path: {configuredPath}");
         }
 
+        if (_ffprobeAvailable)
+        {
+            VideoEditorServices.ReportInformation(
+                nameof(VideoEditorSession),
+                $"Using FFprobe path '{_ffprobePath}'.");
+        }
+        else if (!string.IsNullOrWhiteSpace(_ffprobePath))
+        {
+            VideoEditorServices.ReportWarning(
+                nameof(VideoEditorSession),
+                $"FFprobe path does not exist: {_ffprobePath}");
+        }
+
         Send(new
         {
             type = "config",
@@ -269,6 +286,8 @@ internal sealed class VideoEditorSession
             culture = _options.Culture ?? string.Empty,
             ffmpegAvailable = _ffmpegAvailable,
             ffmpegPath = _ffmpegPath,
+            ffprobeAvailable = _ffprobeAvailable,
+            ffprobePath = _ffprobePath,
             runtimeDiagnostics = VideoEditorRuntimeDiagnosticsCollector.Capture(),
             watermark = _options.WatermarkSettings != null ? new
             {
