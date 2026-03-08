@@ -25,10 +25,10 @@ const TABS: { id: ActivePanel; label: string; icon: typeof Scissors }[] = [
 
 export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelProps) {
   return (
-    <aside className="flex flex-col w-72 shrink-0 bg-ve-surface/60 backdrop-blur-md border-l border-white/[0.06]">
+    <aside className="flex flex-col w-72 shrink-0 bg-ve-surface/60 backdrop-blur-md border-l border-white/6">
       {/* Segmented tab bar */}
       <div className="p-3">
-        <div className="flex items-center gap-0.5 p-1 rounded-2xl bg-ve-elevated/50 ring-1 ring-white/[0.06]">
+        <div className="flex items-center gap-0.5 p-1 rounded-2xl bg-ve-elevated/50 ring-1 ring-white/6">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = state.activePanel === id
             return (
@@ -41,7 +41,7 @@ export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelP
                   transition-all duration-200 ease-out
                   ${active
                     ? 'bg-ve-accent/15 text-amber-400 ring-1 ring-amber-400/40 shadow-glow-amber-sm'
-                    : 'text-ve-secondary hover:text-ve-text hover:bg-white/[0.05]'
+                    : 'text-ve-secondary hover:text-ve-text hover:bg-white/5'
                   }
                 `}
               >
@@ -64,7 +64,7 @@ export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelP
       </div>
 
       {/* Primary export button */}
-      <div className="p-4 border-t border-white/[0.06]">
+      <div className="p-4 border-t border-white/6">
         <PremiumButton
           onClick={onExport}
           disabled={state.isExporting || !state.ffmpegAvailable}
@@ -94,10 +94,10 @@ function TrimPanel({ state }: { state: EditorState }) {
     <>
       <SectionLabel>Trim</SectionLabel>
       {state.isTrimActive ? (
-        <div className="space-y-2.5 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/[0.06]">
+        <div className="space-y-2.5 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6">
           <FieldRow label="In">{fmt(state.trimStart)}</FieldRow>
           <FieldRow label="Out">{fmt(state.trimEnd)}</FieldRow>
-          <div className="h-px bg-white/[0.06]" />
+          <div className="h-px bg-white/6" />
           <FieldRow label="Duration">{fmt(dur)}</FieldRow>
         </div>
       ) : (
@@ -129,7 +129,7 @@ function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Part
         Enter crop mode and drag the crop region on the video preview.
       </p>
       {state.isCropActive && (
-        <div className="space-y-2 mt-3 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/[0.06]">
+        <div className="space-y-2 mt-3 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6">
           <FieldRow label="X">{state.cropX}px</FieldRow>
           <FieldRow label="Y">{state.cropY}px</FieldRow>
           <FieldRow label="W">{state.cropWidth}px</FieldRow>

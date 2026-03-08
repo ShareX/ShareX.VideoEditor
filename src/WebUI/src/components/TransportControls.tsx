@@ -24,7 +24,7 @@ export default function TransportControls({
   onVolumeChange,
 }: TransportControlsProps) {
   return (
-    <div className="flex items-center justify-between h-16 px-5 bg-ve-surface/60 backdrop-blur-md border-t border-white/[0.06] shrink-0">
+    <div className="flex items-center justify-between h-16 px-5 bg-ve-surface/60 backdrop-blur-md border-t border-white/6 shrink-0">
       {/* Left: timecode */}
       <div className="flex items-center gap-1.5 min-w-[120px]">
         <span className="ve-timecode text-ve-text">{formatTime(position)}</span>

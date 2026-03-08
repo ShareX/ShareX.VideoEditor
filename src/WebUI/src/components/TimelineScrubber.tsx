@@ -88,11 +88,11 @@ export default function TimelineScrubber({
   const effectiveTrimEnd = isTrimActive ? trimEnd : duration
 
   return (
-    <div className="bg-ve-track/80 backdrop-blur-sm px-5 pt-3 pb-2.5 shrink-0 select-none border-t border-white/[0.04]">
+    <div className="bg-ve-track/80 backdrop-blur-xs px-5 pt-3 pb-2.5 shrink-0 select-none border-t border-white/4">
       {/* Track container */}
       <div
         ref={trackRef}
-        className="relative h-14 rounded-2xl overflow-hidden cursor-pointer bg-ve-base ring-1 ring-white/[0.06] shadow-inner-highlight"
+        className="relative h-14 rounded-2xl overflow-hidden cursor-pointer bg-ve-base ring-1 ring-white/6 shadow-inner-highlight"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -141,7 +141,7 @@ export default function TimelineScrubber({
           className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_6px_rgba(255,255,255,0.4)]"
           style={{ left: frac(position), transform: 'translateX(-50%)' }}
         >
-          <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-sm rotate-45 shadow-depth" />
+          <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-xs rotate-45 shadow-depth" />
         </div>
       </div>
 
@@ -167,7 +167,7 @@ export default function TimelineScrubber({
             onClick={onSetTrimStart}
             variant="ghost"
             size="sm"
-            className="!h-7 !px-2.5 !text-[11px] font-mono"
+            className="h-7! px-2.5! text-[11px]! font-mono"
             title="Set trim In point (I)"
           >
             [ Set In
@@ -176,7 +176,7 @@ export default function TimelineScrubber({
             onClick={onSetTrimEnd}
             variant="ghost"
             size="sm"
-            className="!h-7 !px-2.5 !text-[11px] font-mono"
+            className="h-7! px-2.5! text-[11px]! font-mono"
             title="Set trim Out point (O)"
           >
             Set Out ]
@@ -186,7 +186,7 @@ export default function TimelineScrubber({
               onClick={onResetTrim}
               variant="ghost"
               size="sm"
-              className="!h-7 !px-2.5 !text-[11px] text-ve-muted"
+              className="h-7! px-2.5! text-[11px]! text-ve-muted"
               title="Reset trim"
             >
               Reset

@@ -23,7 +23,7 @@ export default function Header({
   const fileName = videoPath ? videoPath.split('/').pop()?.split('\\').pop() ?? videoPath : ''
 
   return (
-    <header className="flex items-center gap-4 h-14 px-4 bg-ve-surface/80 backdrop-blur-md border-b border-white/[0.06] shrink-0">
+    <header className="flex items-center gap-4 h-14 px-4 bg-ve-surface/80 backdrop-blur-md border-b border-white/6 shrink-0">
       {/* Logo + title pill */}
       <GlassPill className="h-9 px-4 gap-3">
         <div className="w-7 h-7 rounded-lg bg-ve-accent flex items-center justify-center shadow-glow-amber-sm">
@@ -78,7 +78,7 @@ export default function Header({
               type="text"
               readOnly
               value={ffmpegPath || '(not set)'}
-              className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/[0.06] border-0 cursor-text select-text"
+              className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/6 border-0 cursor-text select-text"
               title={ffmpegPath ? 'Expected FFmpeg path (read-only, select to copy)' : 'Host did not find FFmpeg. Try: Documents\\XerahS\\Tools\\win-x64\\ffmpeg.exe (Windows) or add FFmpeg to PATH.'}
               aria-label="Expected FFmpeg path"
             />

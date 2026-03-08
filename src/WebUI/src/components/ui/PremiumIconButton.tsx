@@ -27,7 +27,7 @@ export function PremiumIconButton({
     rounded-xl
     flex items-center justify-center
     transition-all duration-200 ease-out
-    focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-none
+    focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-hidden
   `
 
   const variants = {
@@ -38,7 +38,7 @@ export function PremiumIconButton({
     `,
     surface: `
       bg-ve-elevated/60 text-ve-secondary
-      ring-1 ring-white/[0.06]
+      ring-1 ring-white/6
       hover:text-ve-text hover:bg-ve-elevated
       active:scale-[0.95]
     `,

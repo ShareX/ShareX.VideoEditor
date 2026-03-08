@@ -17,7 +17,7 @@ export function PremiumToggle({ checked, onChange, label, disabled = false }: Pr
         className={`
           relative w-9 h-5 rounded-full
           transition-all duration-200 ease-out
-          focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-none
+          focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-hidden
           ${checked
             ? 'bg-ve-accent shadow-glow-amber-sm'
             : 'bg-ve-border'

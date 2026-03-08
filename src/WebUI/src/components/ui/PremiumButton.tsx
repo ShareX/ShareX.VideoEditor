@@ -20,7 +20,7 @@ export function PremiumButton({
     inline-flex items-center justify-center gap-2
     font-medium rounded-xl
     transition-all duration-200 ease-out
-    focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-none
+    focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-hidden
     active:scale-[0.97]
     disabled:opacity-40 disabled:pointer-events-none
   `
@@ -39,7 +39,7 @@ export function PremiumButton({
     `,
     secondary: `
       bg-ve-elevated text-ve-text
-      ring-1 ring-white/[0.08]
+      ring-1 ring-white/8
       shadow-inner-highlight
       hover:bg-ve-border/60
     `,

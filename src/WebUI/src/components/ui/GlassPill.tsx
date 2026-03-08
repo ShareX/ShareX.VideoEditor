@@ -10,7 +10,7 @@ export function GlassPill({ children, className = '' }: GlassPillProps) {
     <div
       className={`
         ve-glass rounded-full
-        ring-1 ring-white/[0.06]
+        ring-1 ring-white/6
         shadow-inner-highlight shadow-glass-sm
         flex items-center
         ${className}

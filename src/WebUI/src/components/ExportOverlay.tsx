@@ -14,7 +14,7 @@ export default function ExportOverlay({ progress, message, onCancel }: ExportOve
         className="
           animate-scale-in
           ve-glass-heavy rounded-3xl
-          ring-1 ring-white/[0.08]
+          ring-1 ring-white/8
           shadow-glass-lg
           p-8 w-[340px]
           flex flex-col items-center gap-6
@@ -36,14 +36,14 @@ export default function ExportOverlay({ progress, message, onCancel }: ExportOve
         {/* Progress bar */}
         <div className="w-full space-y-2">
           <div
-            className="w-full h-2 bg-ve-elevated rounded-full overflow-hidden ring-1 ring-white/[0.06]"
+            className="w-full h-2 bg-ve-elevated rounded-full overflow-hidden ring-1 ring-white/6"
             role="progressbar"
             aria-valuenow={progress}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <div
-              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300 shadow-glow-amber-sm animate-pulse-soft"
+              className="h-full bg-linear-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300 shadow-glow-amber-sm animate-pulse-soft"
               style={{ width: `${progress}%` }}
             />
           </div>
