@@ -8,7 +8,7 @@
     <AssemblyName>ShareX.VideoEditor</AssemblyName>
     <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
     <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
-    <WebUIDistDir>$(MSBuildProjectDirectory)/../../WebUI/dist</WebUIDistDir>
+    <WebUIDistDir>$(MSBuildProjectDirectory)/../WebUI/dist</WebUIDistDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,8 +24,8 @@
   <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
   <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true'">
     <Message Text="[VideoEditor] Building WebUI…" Importance="high" />
-    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)/../../WebUI" />
-    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../../WebUI" />
+    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../WebUI" />
   </Target>
 
   <!-- ── Declare WebUI dist files as Content so they copy transitively ─────────
