@@ -61,9 +61,31 @@ public class VideoExportService
         CancellationToken cancellationToken = default)
     {
         string args = BuildArguments(options);
-        VideoEditorServices.ReportInformation(nameof(VideoExportService), $"FFmpeg args: {args}");
+        TimeSpan expectedDuration = options.TrimEnd > options.TrimStart
+            ? options.TrimEnd - options.TrimStart
+            : TimeSpan.Zero;
 
-        var psi = new ProcessStartInfo(_ffmpegPath, args)
+        await ExportWithCustomArgumentsAsync(
+            args,
+            options.OutputPath,
+            expectedDuration,
+            onProgress,
+            cancellationToken);
+    }
+
+    public async Task ExportWithCustomArgumentsAsync(
+        string arguments,
+        string outputPath,
+        TimeSpan expectedDuration,
+        Action<VideoExportProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(arguments, nameof(arguments));
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath, nameof(outputPath));
+
+        VideoEditorServices.ReportInformation(nameof(VideoExportService), $"FFmpeg args: {arguments}");
+
+        var psi = new ProcessStartInfo(_ffmpegPath, arguments)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -73,8 +95,11 @@ public class VideoExportService
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start FFmpeg process.");
 
-        double totalSeconds = (options.TrimEnd - options.TrimStart).TotalSeconds;
-        if (totalSeconds <= 0) totalSeconds = 1;
+        double totalSeconds = expectedDuration.TotalSeconds;
+        if (totalSeconds <= 0)
+        {
+            totalSeconds = 1;
+        }
 
         await using (cancellationToken.Register(() =>
         {
@@ -85,7 +110,10 @@ public class VideoExportService
             while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
             {
                 var progress = ParseProgressLine(line, totalSeconds);
-                if (progress != null) onProgress?.Invoke(progress);
+                if (progress != null)
+                {
+                    onProgress?.Invoke(progress);
+                }
             }
 
             await process.WaitForExitAsync(cancellationToken);
@@ -93,15 +121,18 @@ public class VideoExportService
 
         if (cancellationToken.IsCancellationRequested)
         {
-            // Clean up partial output
-            if (File.Exists(options.OutputPath))
-                try { File.Delete(options.OutputPath); } catch { }
+            if (File.Exists(outputPath))
+            {
+                try { File.Delete(outputPath); } catch { }
+            }
 
             throw new OperationCanceledException(cancellationToken);
         }
 
         if (process.ExitCode != 0)
+        {
             throw new InvalidOperationException($"FFmpeg exited with code {process.ExitCode}.");
+        }
     }
 
     // ── Argument builder ─────────────────────────────────────────────────────

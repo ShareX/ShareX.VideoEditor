@@ -38,6 +38,9 @@ public class VideoEditorAutomationService
     private static readonly Regex DurationRegex =
         new(@"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.Compiled);
 
+    private const double TimestampSelectionEpsilonSeconds = 0.0005;
+    private const long ExactTrimTimescale = 1_000_000;
+
     private readonly string _ffmpegPath;
     private readonly string _ffprobePath;
     private readonly VideoExportService _videoExportService;
@@ -119,6 +122,26 @@ public class VideoEditorAutomationService
             nameof(VideoEditorAutomationService),
             $"Headless trim requested for '{inputPath}' -> '{outputPath}'.");
 
+        ExactVideoTrimPlan? exactTrimPlan = await TryBuildExactVideoTrimPlanAsync(
+            inputPath,
+            outputPath,
+            request,
+            trimEnd,
+            cancellationToken);
+
+        if (exactTrimPlan != null)
+        {
+            return await ExecuteExactVideoTrimAsync(
+                inputPath,
+                outputPath,
+                request,
+                sourceDuration,
+                trimEnd,
+                exactTrimPlan,
+                onProgress,
+                cancellationToken);
+        }
+
         var exportOptions = new VideoExportOptions
         {
             InputPath = inputPath,
@@ -136,6 +159,95 @@ public class VideoEditorAutomationService
         if (!File.Exists(outputPath))
         {
             throw new InvalidOperationException("Export completed but the output file was not created.");
+        }
+
+        return new VideoEditorTrimResult
+        {
+            InputPath = inputPath,
+            OutputPath = outputPath,
+            FFmpegPath = _ffmpegPath,
+            SourceDuration = sourceDuration,
+            TrimStart = request.TrimStart,
+            TrimEnd = trimEnd,
+            OutputDuration = trimEnd - request.TrimStart
+        };
+    }
+
+    private async Task<ExactVideoTrimPlan?> TryBuildExactVideoTrimPlanAsync(
+        string inputPath,
+        string outputPath,
+        VideoEditorTrimRequest request,
+        TimeSpan trimEnd,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_ffprobePath) ||
+            !File.Exists(_ffprobePath) ||
+            !string.Equals(
+                Path.GetExtension(outputPath),
+                ".mp4",
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                string.IsNullOrWhiteSpace(request.OutputFormat) ? "MP4" : request.OutputFormat,
+                "MP4",
+                StringComparison.OrdinalIgnoreCase) ||
+            Math.Abs(request.QualityScale - 1.0) > 0.01)
+        {
+            return null;
+        }
+
+        string[] streamTypes = await ProbeStreamTypesAsync(inputPath, cancellationToken);
+
+        if (streamTypes.Length != 1 ||
+            !string.Equals(streamTypes[0], "video", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        double[] frameTimestamps = await ProbeVideoFrameTimestampsAsync(inputPath, cancellationToken);
+
+        if (frameTimestamps.Length == 0)
+        {
+            return null;
+        }
+
+        return BuildExactVideoTrimPlan(
+            frameTimestamps,
+            request.TrimStart,
+            trimEnd);
+    }
+
+    private async Task<VideoEditorTrimResult> ExecuteExactVideoTrimAsync(
+        string inputPath,
+        string outputPath,
+        VideoEditorTrimRequest request,
+        TimeSpan sourceDuration,
+        TimeSpan trimEnd,
+        ExactVideoTrimPlan plan,
+        Action<VideoExportProgress>? onProgress,
+        CancellationToken cancellationToken)
+    {
+        string arguments = BuildExactTrimArguments(inputPath, outputPath, request.TrimStart, trimEnd, plan);
+
+        VideoEditorServices.ReportInformation(
+            nameof(VideoEditorAutomationService),
+            $"Using exact video-only trim path. Boundary={plan.BoundaryFrameTimestampSeconds:F6}s, " +
+            $"RangeStart={(plan.RangeStartTimestampSeconds?.ToString("F6", CultureInfo.InvariantCulture) ?? "n/a")}s.");
+
+        try
+        {
+            await _videoExportService.ExportWithCustomArgumentsAsync(
+                arguments,
+                outputPath,
+                trimEnd - request.TrimStart,
+                onProgress,
+                cancellationToken);
+
+            Mp4DurationPatcher.PatchExactDuration(outputPath, trimEnd - request.TrimStart);
+        }
+        catch
+        {
+            TryDelete(outputPath);
+            throw;
         }
 
         return new VideoEditorTrimResult
@@ -219,6 +331,194 @@ public class VideoEditorAutomationService
         return (hours * 3600) + (minutes * 60) + seconds;
     }
 
+    private async Task<string[]> ProbeStreamTypesAsync(
+        string inputPath,
+        CancellationToken cancellationToken)
+    {
+        var probeStartInfo = new ProcessStartInfo(
+            _ffprobePath,
+            $"-v error -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 \"{inputPath}\"")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using Process? probeProcess = Process.Start(probeStartInfo);
+        if (probeProcess == null)
+        {
+            return [];
+        }
+
+        using CancellationTokenRegistration probeRegistration =
+            cancellationToken.Register(() => TryKill(probeProcess));
+
+        string rawOutput = await probeProcess.StandardOutput.ReadToEndAsync(cancellationToken);
+        await probeProcess.WaitForExitAsync(cancellationToken);
+
+        return rawOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .ToArray();
+    }
+
+    private async Task<double[]> ProbeVideoFrameTimestampsAsync(
+        string inputPath,
+        CancellationToken cancellationToken)
+    {
+        var probeStartInfo = new ProcessStartInfo(
+            _ffprobePath,
+            $"-v error -select_streams v:0 -show_entries frame=best_effort_timestamp_time -of csv=p=0 \"{inputPath}\"")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using Process? probeProcess = Process.Start(probeStartInfo);
+        if (probeProcess == null)
+        {
+            return [];
+        }
+
+        using CancellationTokenRegistration probeRegistration =
+            cancellationToken.Register(() => TryKill(probeProcess));
+
+        string rawOutput = await probeProcess.StandardOutput.ReadToEndAsync(cancellationToken);
+        await probeProcess.WaitForExitAsync(cancellationToken);
+
+        return rawOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(static line => line.Split(',')[0].Trim())
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(static line => double.Parse(line, CultureInfo.InvariantCulture))
+            .ToArray();
+    }
+
+    private static ExactVideoTrimPlan? BuildExactVideoTrimPlan(
+        IReadOnlyList<double> frameTimestamps,
+        TimeSpan trimStart,
+        TimeSpan trimEnd)
+    {
+        double trimStartSeconds = trimStart.TotalSeconds;
+        double trimEndSeconds = trimEnd.TotalSeconds;
+
+        int boundaryIndex = 0;
+
+        while (boundaryIndex + 1 < frameTimestamps.Count &&
+               frameTimestamps[boundaryIndex + 1] <= trimStartSeconds + TimestampSelectionEpsilonSeconds)
+        {
+            boundaryIndex++;
+        }
+
+        int rangeStartIndex = 0;
+
+        while (rangeStartIndex < frameTimestamps.Count &&
+               frameTimestamps[rangeStartIndex] < trimStartSeconds - TimestampSelectionEpsilonSeconds)
+        {
+            rangeStartIndex++;
+        }
+
+        int lastRetainedIndex = frameTimestamps.Count - 1;
+
+        while (lastRetainedIndex >= 0 &&
+               frameTimestamps[lastRetainedIndex] >= trimEndSeconds - TimestampSelectionEpsilonSeconds)
+        {
+            lastRetainedIndex--;
+        }
+
+        if (lastRetainedIndex < 0)
+        {
+            return null;
+        }
+
+        bool hasBoundaryCarryFrame =
+            boundaryIndex < rangeStartIndex &&
+            boundaryIndex <= lastRetainedIndex;
+
+        bool hasRange = rangeStartIndex <= lastRetainedIndex;
+
+        if (!hasBoundaryCarryFrame && !hasRange)
+        {
+            return null;
+        }
+
+        double boundaryFrameTimestamp = frameTimestamps[boundaryIndex];
+        double? rangeStartTimestamp = hasRange ? frameTimestamps[rangeStartIndex] : null;
+
+        return new ExactVideoTrimPlan(
+            boundaryFrameTimestamp,
+            hasBoundaryCarryFrame,
+            rangeStartTimestamp);
+    }
+
+    private static string BuildExactTrimArguments(
+        string inputPath,
+        string outputPath,
+        TimeSpan trimStart,
+        TimeSpan trimEnd,
+        ExactVideoTrimPlan plan)
+    {
+        string trimStartSeconds = FormatSeconds(trimStart.TotalSeconds);
+        string trimEndSeconds = FormatSeconds(trimEnd.TotalSeconds);
+        string boundaryLowerSeconds = FormatSeconds(Math.Max(
+            0,
+            plan.BoundaryFrameTimestampSeconds - TimestampSelectionEpsilonSeconds));
+        string boundaryUpperSeconds = FormatSeconds(
+            plan.BoundaryFrameTimestampSeconds + TimestampSelectionEpsilonSeconds);
+        string startTimestampMicroseconds = ((long)Math.Round(
+            trimStart.TotalSeconds * ExactTrimTimescale,
+            MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+        string selectExpression;
+
+        if (plan.HasBoundaryCarryFrame && plan.RangeStartTimestampSeconds.HasValue)
+        {
+            string rangeStartLowerSeconds = FormatSeconds(Math.Max(
+                0,
+                plan.RangeStartTimestampSeconds.Value - TimestampSelectionEpsilonSeconds));
+
+            selectExpression =
+                $"between(t,{boundaryLowerSeconds},{boundaryUpperSeconds})+" +
+                $"gte(t,{rangeStartLowerSeconds})*lt(t,{trimEndSeconds})";
+        }
+        else if (plan.HasBoundaryCarryFrame)
+        {
+            selectExpression = $"between(t,{boundaryLowerSeconds},{boundaryUpperSeconds})";
+        }
+        else
+        {
+            string rangeStartLowerSeconds = FormatSeconds(Math.Max(
+                0,
+                (plan.RangeStartTimestampSeconds ?? trimStart.TotalSeconds) - TimestampSelectionEpsilonSeconds));
+
+            selectExpression =
+                $"gte(t,{rangeStartLowerSeconds})*lt(t,{trimEndSeconds})";
+        }
+
+        string filterComplex =
+            $"[0:v]select='{selectExpression}',settb=AVTB," +
+            $"setpts='if(lt(T,{trimStartSeconds}),0,PTS-{startTimestampMicroseconds})'[v]";
+
+        return
+            $"-i \"{inputPath}\" " +
+            $"-filter_complex \"{filterComplex}\" " +
+            "-map \"[v]\" " +
+            "-fps_mode passthrough " +
+            "-enc_time_base 1:1000000 " +
+            "-video_track_timescale 1000000 " +
+            "-c:v libx264 -x264-params bframes=0 -preset fast -crf 23 " +
+            "-movflags +faststart -an " +
+            $"-y \"{outputPath}\"";
+    }
+
+    private static string FormatSeconds(double seconds)
+    {
+        return seconds.ToString("0.######", CultureInfo.InvariantCulture);
+    }
+
     private static string ResolveFFprobePath(string? ffprobePath, string ffmpegPath)
     {
         if (!string.IsNullOrWhiteSpace(ffprobePath))
@@ -268,6 +568,20 @@ public class VideoEditorAutomationService
         return resolvedOutputPath;
     }
 
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private static void TryKill(Process process)
     {
         try
@@ -281,4 +595,9 @@ public class VideoEditorAutomationService
         {
         }
     }
+
+    private sealed record ExactVideoTrimPlan(
+        double BoundaryFrameTimestampSeconds,
+        bool HasBoundaryCarryFrame,
+        double? RangeStartTimestampSeconds);
 }
