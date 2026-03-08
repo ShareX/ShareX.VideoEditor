@@ -416,8 +416,8 @@ internal sealed class VideoEditorSession
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Resolves the path to the compiled WebUI <c>index.html</c>.
-    /// The Vite build output is copied to <c>WebUI/dist/</c> next to the assembly DLL.
+    /// Resolves the path to the compiled frontend <c>index.html</c>.
+    /// The Vite build output is copied to <c>frontend/dist/</c> next to the assembly DLL.
     /// </summary>
     private static string ResolveWebUiPath()
     {
@@ -430,15 +430,15 @@ internal sealed class VideoEditorSession
                 return candidate;
         }
 
-        string defaultCandidate = Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
+        string defaultCandidate = Path.Combine(assemblyDir, "frontend", "dist", "index.html");
 
         throw new FileNotFoundException(
-            "WebUI dist not found. Run 'npm run build' inside WebUI first.", defaultCandidate);
+            "Frontend dist not found. Run 'npm run build' inside frontend first.", defaultCandidate);
     }
 
     private static IEnumerable<string> EnumerateWebUiCandidates(string assemblyDir)
     {
-        yield return Path.Combine(assemblyDir, "WebUI", "dist", "index.html");
+        yield return Path.Combine(assemblyDir, "frontend", "dist", "index.html");
 
         string? dir = assemblyDir;
         for (int i = 0; i < 10 && dir != null; i++)
@@ -447,8 +447,8 @@ internal sealed class VideoEditorSession
             if (dir == null)
                 yield break;
 
-            yield return Path.Combine(dir, "WebUI", "dist", "index.html");
-            yield return Path.Combine(dir, "ShareX.VideoEditor", "WebUI", "dist", "index.html");
+            yield return Path.Combine(dir, "frontend", "dist", "index.html");
+            yield return Path.Combine(dir, "ShareX.VideoEditor", "frontend", "dist", "index.html");
         }
     }
 
