@@ -40,7 +40,7 @@ export interface ConfigMessage {
   theme: 'Dark' | 'Light' | 'System'
   culture: string
   ffmpegAvailable: boolean
-  /** Path the host expects for FFmpeg (empty if not set). Shown when ffmpegAvailable is false. */
+  /** Path supplied by VideoEditorOptions.FFmpegPath (empty if not set). */
   ffmpegPath?: string
   runtimeDiagnostics?: RuntimeDiagnosticsSnapshot | null
   watermark?: WatermarkConfig | null

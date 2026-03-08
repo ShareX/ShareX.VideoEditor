@@ -168,6 +168,13 @@ function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange
     <>
       <SectionLabel>Export Settings</SectionLabel>
 
+      <PremiumInput
+        label="FFmpeg Path"
+        value={state.ffmpegPath || '(not set)'}
+        readOnly
+        title={state.ffmpegPath || 'VideoEditorOptions.FFmpegPath was not provided by the host.'}
+      />
+
       <PremiumSelect
         label="Format"
         value={state.outputFormat}

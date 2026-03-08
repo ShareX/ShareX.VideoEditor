@@ -27,6 +27,7 @@ export default function Header({
 }: HeaderProps) {
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false)
   const fileName = videoPath ? videoPath.split('/').pop()?.split('\\').pop() ?? videoPath : ''
+  const diagnostics = runtimeDiagnostics ?? { packageReferences: [], loadedAssemblies: [] }
 
   return (
     <>
@@ -72,25 +73,27 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {!ffmpegAvailable && (
-            <div className="flex items-center gap-2 min-w-0 max-w-md">
+          <div className="flex items-center gap-2 min-w-0 max-w-md">
+            <GlassPill className="h-7 px-3 gap-1.5 shrink-0">
+              <span className="text-[11px] text-ve-secondary font-medium">FFmpeg</span>
+            </GlassPill>
+            {!ffmpegAvailable && (
               <GlassPill className="h-7 px-3 gap-1.5 shrink-0">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                 <span className="text-[11px] text-amber-400 font-medium">FFmpeg not found</span>
               </GlassPill>
-              <input
-                type="text"
-                readOnly
-                value={ffmpegPath || '(not set)'}
-                className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/6 border-0 cursor-text select-text"
-                title={ffmpegPath ? 'Expected FFmpeg path (read-only, select to copy)' : 'Host did not find FFmpeg. Try: Documents\\XerahS\\Tools\\win-x64\\ffmpeg.exe (Windows) or add FFmpeg to PATH.'}
-                aria-label="Expected FFmpeg path"
-              />
-            </div>
-          )}
+            )}
+            <input
+              type="text"
+              readOnly
+              value={ffmpegPath || '(not set)'}
+              className="min-w-[120px] max-w-[280px] h-7 px-2.5 text-[11px] font-mono text-ve-secondary bg-ve-elevated/60 rounded-lg ring-1 ring-white/6 border-0 cursor-text select-text"
+              title={ffmpegPath ? 'VideoEditorOptions.FFmpegPath (read-only, select to copy)' : 'Host did not provide VideoEditorOptions.FFmpegPath.'}
+              aria-label="Configured FFmpeg path"
+            />
+          </div>
           <PremiumButton
             onClick={() => setIsDiagnosticsOpen(true)}
-            disabled={!runtimeDiagnostics}
             size="sm"
             variant="secondary"
             icon={<Package className="w-3.5 h-3.5" />}
@@ -114,10 +117,10 @@ export default function Header({
         </div>
       </header>
 
-      {isDiagnosticsOpen && runtimeDiagnostics && (
+      {isDiagnosticsOpen && (
         <RuntimeDiagnosticsModal
-          packageReferences={runtimeDiagnostics.packageReferences}
-          loadedAssemblies={runtimeDiagnostics.loadedAssemblies}
+          packageReferences={diagnostics.packageReferences}
+          loadedAssemblies={diagnostics.loadedAssemblies}
           onClose={() => setIsDiagnosticsOpen(false)}
         />
       )}

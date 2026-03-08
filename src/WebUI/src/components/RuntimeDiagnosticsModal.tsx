@@ -57,15 +57,19 @@ export default function RuntimeDiagnosticsModal({
             </div>
 
             <div className="grid gap-2">
-              {packageReferences.map(packageReference => (
-                <div
-                  key={packageReference.name}
-                  className="flex items-center justify-between gap-4 rounded-2xl bg-ve-elevated/55 ring-1 ring-white/6 px-4 py-3"
-                >
-                  <span className="text-sm font-medium text-ve-text">{packageReference.name}</span>
-                  <span className="font-mono text-xs text-amber-400">{packageReference.version}</span>
-                </div>
-              ))}
+              {packageReferences.length > 0 ? (
+                packageReferences.map(packageReference => (
+                  <div
+                    key={packageReference.name}
+                    className="flex items-center justify-between gap-4 rounded-2xl bg-ve-elevated/55 ring-1 ring-white/6 px-4 py-3"
+                  >
+                    <span className="text-sm font-medium text-ve-text">{packageReference.name}</span>
+                    <span className="font-mono text-xs text-amber-400">{packageReference.version}</span>
+                  </div>
+                ))
+              ) : (
+                <EmptyDiagnosticsState message="No package reference diagnostics were provided by the host." />
+              )}
             </div>
           </section>
 
@@ -90,9 +94,17 @@ export default function RuntimeDiagnosticsModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {loadedAssemblies.map(assembly => (
-                    <AssemblyRow key={assembly.name} assembly={assembly} />
-                  ))}
+                  {loadedAssemblies.length > 0 ? (
+                    loadedAssemblies.map(assembly => (
+                      <AssemblyRow key={assembly.name} assembly={assembly} />
+                    ))
+                  ) : (
+                    <tr className="border-t border-white/6">
+                      <td colSpan={6} className="px-4 py-6">
+                        <EmptyDiagnosticsState message="No loaded assembly diagnostics were provided by the host." />
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -141,4 +153,12 @@ function AssemblyRow({ assembly }: { assembly: LoadedAssemblyInfo }) {
 
 function valueOrDash(value: string) {
   return value || '-'
+}
+
+function EmptyDiagnosticsState({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6 px-4 py-4 text-sm text-ve-muted">
+      {message}
+    </div>
+  )
 }
