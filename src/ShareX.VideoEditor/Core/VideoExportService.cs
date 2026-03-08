@@ -115,7 +115,7 @@ public class VideoExportService
         {
             sb.Append($"-ss {opts.TrimStart:hh\\:mm\\:ss\\.ff} ");
             sb.Append($"-i \"{opts.InputPath}\" ");
-            sb.Append($"-to {opts.TrimEnd - opts.TrimStart:hh\\:mm\\:ss\\.ff} ");
+            sb.Append($"-t {opts.TrimEnd - opts.TrimStart:hh\\:mm\\:ss\\.ff} ");
         }
         else
         {
