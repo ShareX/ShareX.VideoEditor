@@ -147,24 +147,34 @@ internal sealed class VideoEditorSession
     public void Run()
     {
         string indexHtml = ResolveWebUiPath();
+        VideoEditorRuntimeValidator.EnsureAvailable();
 
-        _window = new PhotinoWindow()
-            .SetTitle(_options.WindowTitle ?? "ShareX — Video Editor")
-            .SetSize(1280, 800)
-            .SetMinSize(900, 600)
-            .SetResizable(true)
-            .SetChromeless(false)
-            .RegisterCustomSchemeHandler(MediaScheme, ServeMediaFile)
-            .RegisterWebMessageReceivedHandler(OnWebMessage);
+        try
+        {
+            _window = new PhotinoWindow()
+                .SetTitle(_options.WindowTitle ?? "ShareX — Video Editor")
+                .SetSize(1280, 800)
+                .SetMinSize(900, 600)
+                .SetResizable(true)
+                .SetChromeless(false)
+                .RegisterCustomSchemeHandler(MediaScheme, ServeMediaFile)
+                .RegisterWebMessageReceivedHandler(OnWebMessage);
 
-        _window.Load(new Uri(indexHtml));
-        _window.WaitForClose();
+            _window.Load(new Uri(indexHtml));
+            _window.WaitForClose();
 
-        // Clean up in-flight operations
-        _thumbnailCts?.Cancel();
-        _exportCts?.Cancel();
-
-        try { _events?.EditorClosed?.Invoke(); } catch { }
+            try { _events?.EditorClosed?.Invoke(); } catch { }
+        }
+        catch (Exception ex)
+        {
+            throw VideoEditorRuntimeValidator.NormalizeStartupException(ex);
+        }
+        finally
+        {
+            // Clean up in-flight operations even when startup fails.
+            _thumbnailCts?.Cancel();
+            _exportCts?.Cancel();
+        }
     }
 
     // ── Custom scheme: serve the local video file to the WebView ─────────────

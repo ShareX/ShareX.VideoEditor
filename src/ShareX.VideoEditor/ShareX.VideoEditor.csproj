@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <!-- Photino.NET — OS-native WebView host (WebView2 on Windows, WebKit on Linux/macOS) -->
-    <PackageReference Include="Photino.NET" Version="3.0.14" />
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
 
     <!-- Serialization for C# ↔ JS bridge messages -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
