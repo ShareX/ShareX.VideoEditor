@@ -193,6 +193,11 @@ public class VideoExportService
             filters.Add($"drawtext=text='{text}':fontsize=24:fontcolor=white:x=w-tw-10:y=h-th-10:alpha=0.8");
         }
 
+        // GIF: apply palette filter after crop/fps/scale/watermark so one -vf is used
+        bool isGif = string.Equals(opts.OutputFormat, "GIF", StringComparison.OrdinalIgnoreCase);
+        if (isGif)
+            filters.Add("split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
+
         if (filters.Count > 0)
             sb.Append($"-vf \"{string.Join(",", filters)}\" ");
 
@@ -214,11 +219,8 @@ public class VideoExportService
                 break;
 
             case "GIF":
-                // Two-pass palettegen for high-quality GIF
-                // (single-pass for simplicity; two-pass requires intermediate file)
-                sb.Append("-loop 0 ");
-                sb.Append("-vf \"split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" ");
-                sb.Append("-an ");
+                // Palette filter is already merged into -vf in BuildArguments
+                sb.Append("-loop 0 -an ");
                 break;
 
             case "WEBP":
