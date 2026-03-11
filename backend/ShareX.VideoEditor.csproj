@@ -9,6 +9,20 @@
     <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
     <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
     <WebUIDistDir>$(MSBuildProjectDirectory)/../frontend/dist</WebUIDistDir>
+    <NodeExecutable Condition="'$(NodeExecutable)' == '' and '$(OS)' == 'Windows_NT'">node.exe</NodeExecutable>
+    <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('$(HOME)/.local/bin/node')">$(HOME)/.local/bin/node</NodeExecutable>
+    <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('/usr/local/bin/node')">/usr/local/bin/node</NodeExecutable>
+    <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('/usr/bin/node')">/usr/bin/node</NodeExecutable>
+    <NodeExecutable Condition="'$(NodeExecutable)' == ''">node</NodeExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == '' and '$(OS)' == 'Windows_NT'">npm.cmd</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('$(HOME)/.local/bin/npm')">$(HOME)/.local/bin/npm</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('/usr/local/bin/npm')">/usr/local/bin/npm</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('/usr/bin/npm')">/usr/bin/npm</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == ''">npm</NpmExecutable>
+    <NpmCommandPrefix Condition="'$(OS)' == 'Windows_NT'">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
+    <NpmCommandPrefix Condition="'$(OS)' != 'Windows_NT'">&quot;$(NodeExecutable)&quot; &quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
+    <NodeExecutableDirectory>$([System.IO.Path]::GetDirectoryName('$(NodeExecutable)'))</NodeExecutableDirectory>
+    <NpmEnvironmentVariables Condition="'$(OS)' != 'Windows_NT' and '$(NodeExecutableDirectory)' != ''">PATH=$(NodeExecutableDirectory):$(PATH)</NpmEnvironmentVariables>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,9 +37,13 @@
   <!-- Runs `npm ci && npm run build` inside frontend/ before the C# build.  -->
   <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
   <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true'">
-    <Message Text="[VideoEditor] Building WebUI…" Importance="high" />
-    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)/../frontend" />
-    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../frontend" />
+    <Message Text="[VideoEditor] Building WebUI with $(NpmCommandPrefix)..." Importance="high" />
+    <Exec Command="$(NpmCommandPrefix) ci"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../frontend"
+          EnvironmentVariables="$(NpmEnvironmentVariables)" />
+    <Exec Command="$(NpmCommandPrefix) run build"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../frontend"
+          EnvironmentVariables="$(NpmEnvironmentVariables)" />
   </Target>
 
   <!-- ── Declare frontend dist files as Content so they copy transitively ───────
