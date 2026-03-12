@@ -37,6 +37,11 @@
   <!-- ── WebUI build integration ────────────────────────────────────────────── -->
   <!-- Runs `npm ci && npm run build` inside frontend/ before the C# build.  -->
   <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
+  <Target Name="ValidateNodeVersion" BeforeTargets="BuildWebUI" Condition="'$(BuildWebUI)' == 'true'">
+    <Message Text="[VideoEditor] Validating Node.js version for Vite 8..." Importance="high" />
+    <Exec Command="&quot;$(NodeExecutable)&quot; -e &quot;const version = process.versions.node.split('.').map(Number); const ok = version[0] &gt; 22 || (version[0] === 22 ? version[1] &gt;= 12 : version[0] === 20 ? version[1] &gt;= 19 : false); if (!ok) { console.error('Vite 8 requires Node.js ^20.19.0 || >=22.12.0. Found ' + process.versions.node + '.'); process.exit(1); }&quot;" />
+  </Target>
+
   <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true'">
     <Message Text="[VideoEditor] Building WebUI with $(NpmCommandPrefix)..." Importance="high" />
     <Exec Command="$(NpmCommandPrefix) ci"
