@@ -9,20 +9,21 @@
     <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
     <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
     <WebUIDistDir>$(MSBuildProjectDirectory)/../frontend/dist</WebUIDistDir>
-    <NodeExecutable Condition="'$(NodeExecutable)' == '' and '$(OS)' == 'Windows_NT'">node.exe</NodeExecutable>
+    <NodeExecutable Condition="'$(NodeExecutable)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">node.exe</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('$(HOME)/.local/bin/node')">$(HOME)/.local/bin/node</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('/usr/local/bin/node')">/usr/local/bin/node</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('/usr/bin/node')">/usr/bin/node</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == ''">node</NodeExecutable>
-    <NpmExecutable Condition="'$(NpmExecutable)' == '' and '$(OS)' == 'Windows_NT'">npm.cmd</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">npm.cmd</NpmExecutable>
     <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('$(HOME)/.local/bin/npm')">$(HOME)/.local/bin/npm</NpmExecutable>
     <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('/usr/local/bin/npm')">/usr/local/bin/npm</NpmExecutable>
     <NpmExecutable Condition="'$(NpmExecutable)' == '' and Exists('/usr/bin/npm')">/usr/bin/npm</NpmExecutable>
     <NpmExecutable Condition="'$(NpmExecutable)' == ''">npm</NpmExecutable>
-    <NpmCommandPrefix Condition="'$(OS)' == 'Windows_NT'">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
-    <NpmCommandPrefix Condition="'$(OS)' != 'Windows_NT'">&quot;$(NodeExecutable)&quot; &quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
+    <NpmCommandPrefix Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(NpmExecutable)' == 'npm.cmd'">npm.cmd</NpmCommandPrefix>
+    <NpmCommandPrefix Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(NpmExecutable)' != 'npm.cmd'">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
+    <NpmCommandPrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
     <NodeExecutableDirectory>$([System.IO.Path]::GetDirectoryName('$(NodeExecutable)'))</NodeExecutableDirectory>
-    <NpmEnvironmentVariables Condition="'$(OS)' != 'Windows_NT' and '$(NodeExecutableDirectory)' != ''">PATH=$(NodeExecutableDirectory):$(PATH)</NpmEnvironmentVariables>
+    <NpmEnvironmentVariables Condition="!$([MSBuild]::IsOSPlatform('Windows')) and '$(NodeExecutableDirectory)' != ''">PATH=$(NodeExecutableDirectory):$(PATH)</NpmEnvironmentVariables>
   </PropertyGroup>
 
   <ItemGroup>
