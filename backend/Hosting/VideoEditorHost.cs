@@ -177,9 +177,16 @@ internal sealed class VideoEditorSession
         }
         finally
         {
+            // Dispose the Photino window so WebView2 native resources are fully released
+            // before any subsequent launch.
+            try { _window?.Close(); } catch { }
+            _window = null;
+
             // Clean up in-flight operations even when startup fails.
             _thumbnailCts?.Cancel();
+            _thumbnailCts?.Dispose();
             _exportCts?.Cancel();
+            _exportCts?.Dispose();
         }
     }
 
