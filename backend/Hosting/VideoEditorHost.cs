@@ -250,8 +250,11 @@ internal sealed class VideoEditorSession
 
     private void SendConfig()
     {
-        // The video is served via the custom scheme; build the URL the WebView will use.
-        string videoUrl = $"{MediaScheme}://host/video";
+        // Serve the video via a file:// URL so WebView2's native media pipeline handles
+        // range requests, seeking, and codec negotiation — custom scheme responses lack
+        // the HTTP headers (Accept-Ranges, Content-Length) that Chromium requires for
+        // HTML5 <video> playback.
+        string videoUrl = new Uri(_options.VideoPath).AbsoluteUri;
 
         if (_ffmpegAvailable)
         {

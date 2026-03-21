@@ -62,13 +62,17 @@
     <ItemGroup>
       <Content Remove="@(Content)" Condition="'%(Content.Link)' != '' and $([System.String]::Copy('%(Content.Link)').StartsWith('frontend/dist'))" />
     </ItemGroup>
+    <!-- Collect assets into a temp item to avoid MSB4120 self-referencing %(Filename) -->
+    <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
+      <_WebUIAsset Include="$(WebUIDistDir)/assets/*.*" />
+    </ItemGroup>
     <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
       <Content Include="$(WebUIDistDir)/index.html">
         <Link>frontend/dist/index.html</Link>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
-      <Content Include="$(WebUIDistDir)/assets/*.*">
-        <Link>frontend/dist/assets/%(Filename)%(Extension)</Link>
+      <Content Include="@(_WebUIAsset)">
+        <Link>frontend/dist/assets/%(_WebUIAsset.Filename)%(_WebUIAsset.Extension)</Link>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
     </ItemGroup>
@@ -80,13 +84,17 @@
     <ItemGroup>
       <Content Remove="@(Content)" Condition="'%(Content.Link)' != '' and $([System.String]::Copy('%(Content.Link)').StartsWith('frontend/dist'))" />
     </ItemGroup>
+    <!-- Collect assets into a temp item to avoid MSB4120 self-referencing %(Filename) -->
+    <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
+      <_WebUIAsset Include="$(WebUIDistDir)/assets/*.*" />
+    </ItemGroup>
     <ItemGroup Condition="Exists('$(WebUIDistDir)/index.html')">
       <Content Include="$(WebUIDistDir)/index.html">
         <Link>frontend/dist/index.html</Link>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
-      <Content Include="$(WebUIDistDir)/assets/*.*">
-        <Link>frontend/dist/assets/%(Filename)%(Extension)</Link>
+      <Content Include="@(_WebUIAsset)">
+        <Link>frontend/dist/assets/%(_WebUIAsset.Filename)%(_WebUIAsset.Extension)</Link>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
     </ItemGroup>

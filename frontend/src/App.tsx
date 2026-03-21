@@ -158,7 +158,8 @@ export default function App() {
     const vid = videoRef.current
     if (!vid) return
     if (vid.paused) {
-      vid.play().catch(() => {
+      vid.play().catch(err => {
+        console.error('Play failed:', err)
         setState(s => ({ ...s, isPlaying: false }))
       })
     } else {

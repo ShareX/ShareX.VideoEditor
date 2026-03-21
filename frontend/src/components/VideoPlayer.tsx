@@ -29,12 +29,17 @@ export default function VideoPlayer({
         <video
           ref={videoRef}
           src={videoUrl}
+          preload="auto"
           className="max-w-full max-h-full object-contain"
           onDurationChange={onDurationChange}
           onTimeUpdate={onTimeUpdate}
           onPlay={onPlaybackStateChange}
           onPause={onPlaybackStateChange}
           onEnded={onPlaybackStateChange}
+          onError={e => {
+            const err = (e.target as HTMLVideoElement).error
+            console.error('Video load error:', err?.code, err?.message)
+          }}
           onContextMenu={e => e.preventDefault()}
         />
       ) : (
