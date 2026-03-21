@@ -120,7 +120,6 @@ export default function Header({
       {isDiagnosticsOpen && (
         <RuntimeDiagnosticsModal
           packageReferences={diagnostics.packageReferences}
-          loadedAssemblies={diagnostics.loadedAssemblies}
           onClose={() => setIsDiagnosticsOpen(false)}
         />
       )}
