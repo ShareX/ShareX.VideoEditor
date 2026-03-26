@@ -24,6 +24,7 @@
 #endregion License Information (GPL v3)
 
 using System.Runtime.InteropServices;
+using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Photino.NET;
@@ -155,6 +156,9 @@ internal sealed class VideoEditorSession
         string indexHtml = ResolveWebUiPath();
         VideoEditorRuntimeValidator.EnsureAvailable();
 
+        using var linuxWaylandMitigation = LinuxWaylandExplicitSyncMitigationScope.Create(
+            _options.EnableLinuxWaylandExplicitSyncMitigation);
+
         try
         {
             _window = new PhotinoWindow()
@@ -191,6 +195,75 @@ internal sealed class VideoEditorSession
     }
 
     // ── Custom scheme: serve the local video file to the WebView ─────────────
+
+    private sealed class LinuxWaylandExplicitSyncMitigationScope : IDisposable
+    {
+        private const string GdkDebugEnvironmentVariable = "GDK_DEBUG";
+        private const string MitigationToken = "no-explicit-sync";
+
+        private readonly string? _previousValue;
+        private readonly bool _changedValue;
+
+        private LinuxWaylandExplicitSyncMitigationScope(string? previousValue, bool changedValue)
+        {
+            _previousValue = previousValue;
+            _changedValue = changedValue;
+        }
+
+        public static LinuxWaylandExplicitSyncMitigationScope? Create(bool enabled)
+        {
+            if (!enabled || !OperatingSystem.IsLinux() || !IsWaylandSession())
+            {
+                return null;
+            }
+
+            string? currentValue = Environment.GetEnvironmentVariable(GdkDebugEnvironmentVariable);
+            if (ContainsToken(currentValue, MitigationToken))
+            {
+                return new LinuxWaylandExplicitSyncMitigationScope(currentValue, false);
+            }
+
+            string updatedValue = string.IsNullOrWhiteSpace(currentValue)
+                ? MitigationToken
+                : $"{currentValue},{MitigationToken}";
+
+            Environment.SetEnvironmentVariable(GdkDebugEnvironmentVariable, updatedValue);
+            return new LinuxWaylandExplicitSyncMitigationScope(currentValue, true);
+        }
+
+        public void Dispose()
+        {
+            if (!_changedValue)
+            {
+                return;
+            }
+
+            Environment.SetEnvironmentVariable(GdkDebugEnvironmentVariable, _previousValue);
+        }
+
+        private static bool IsWaylandSession()
+        {
+            string? sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            if (string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+        }
+
+        private static bool ContainsToken(string? value, string token)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            return value
+                .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(part => string.Equals(part.Trim(), token, StringComparison.OrdinalIgnoreCase));
+        }
+    }
 
     private Stream ServeMediaFile(object sender, string scheme, string url, out string contentType)
     {

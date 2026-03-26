@@ -74,4 +74,12 @@ public class VideoEditorOptions
     /// If null, watermarking is disabled.
     /// </summary>
     public WatermarkSettings? WatermarkSettings { get; set; }
+
+    /// <summary>
+    /// Enables a Linux Wayland launch mitigation for GTK explicit sync negotiation.
+    /// When true, the host temporarily sets <c>GDK_DEBUG=no-explicit-sync</c> for
+    /// the lifetime of the Photino window on Wayland sessions, then restores the
+    /// previous process value when the editor exits.
+    /// </summary>
+    public bool EnableLinuxWaylandExplicitSyncMitigation { get; set; }
 }
