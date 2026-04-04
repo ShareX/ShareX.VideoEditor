@@ -6,9 +6,8 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>ShareX.VideoEditor</RootNamespace>
     <AssemblyName>ShareX.VideoEditor</AssemblyName>
-    <!-- Skip WebUI build by default so C# compiles independently of Node.js.
-         Set BuildWebUI=true (or any non-false value) to also build the frontend. -->
-    <BuildWebUI Condition="'$(BuildWebUI)' == ''">false</BuildWebUI>
+    <!-- Skip WebUI build when requested (e.g. in CI that pre-builds the WebUI separately) -->
+    <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
     <WebUIDistDir>$(MSBuildProjectDirectory)/../frontend/dist</WebUIDistDir>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">node.exe</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('$(HOME)/.local/bin/node')">$(HOME)/.local/bin/node</NodeExecutable>
