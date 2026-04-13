@@ -37,11 +37,15 @@ export interface RuntimeDiagnosticsSnapshot {
 export interface ConfigMessage {
   type: 'config'
   videoUrl: string
+  hostPlatform?: 'Windows' | 'Linux' | 'MacOS' | 'Unknown'
   theme: 'Dark' | 'Light' | 'System'
   culture: string
   ffmpegAvailable: boolean
   /** Path supplied by VideoEditorOptions.FFmpegPath (empty if not set). */
   ffmpegPath?: string
+  videoCodec?: string
+  videoCodecTag?: string
+  videoProfile?: string
   runtimeDiagnostics?: RuntimeDiagnosticsSnapshot | null
   watermark?: WatermarkConfig | null
 }
@@ -116,8 +120,15 @@ export type ActivePanel = 'trim' | 'crop' | 'watermark' | 'export'
 
 export interface EditorState {
   videoUrl: string
+  hostPlatform: NonNullable<ConfigMessage['hostPlatform']>
+  videoCodec: string
+  videoCodecTag: string
+  videoProfile: string
   ffmpegAvailable: boolean
   ffmpegPath: string
+  playbackWarning: string
+  playbackHelpUrl: string
+  playbackError: string
   runtimeDiagnostics: RuntimeDiagnosticsSnapshot | null
   watermarkConfig: WatermarkConfig | null
   theme: ConfigMessage['theme']

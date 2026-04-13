@@ -335,6 +335,7 @@ internal sealed class VideoEditorSession
         // the HTTP headers (Accept-Ranges, Content-Length) that Chromium requires for
         // HTML5 <video> playback.
         string videoUrl = new Uri(_options.VideoPath).AbsoluteUri;
+        VideoEditorMediaInfo? mediaInfo = VideoEditorMediaProbe.TryProbePrimaryVideoStream(_ffprobePath, _options.VideoPath);
 
         if (_ffmpegAvailable)
         {
@@ -363,16 +364,36 @@ internal sealed class VideoEditorSession
                 $"FFprobe path does not exist: {_ffprobePath}");
         }
 
+        if (mediaInfo != null)
+        {
+            string codecSummary = string.IsNullOrWhiteSpace(mediaInfo.Profile)
+                ? mediaInfo.CodecName
+                : $"{mediaInfo.CodecName} ({mediaInfo.Profile})";
+            VideoEditorServices.ReportInformation(
+                nameof(VideoEditorSession),
+                $"Detected primary video stream codec: {codecSummary}.");
+        }
+
         Send(new
         {
             type = "config",
             videoUrl,
+            hostPlatform = OperatingSystem.IsWindows()
+                ? "Windows"
+                : OperatingSystem.IsLinux()
+                    ? "Linux"
+                    : OperatingSystem.IsMacOS()
+                        ? "MacOS"
+                        : "Unknown",
             theme = _options.Theme,
             culture = _options.Culture ?? string.Empty,
             ffmpegAvailable = _ffmpegAvailable,
             ffmpegPath = _ffmpegPath,
             ffprobeAvailable = _ffprobeAvailable,
             ffprobePath = _ffprobePath,
+            videoCodec = mediaInfo?.CodecName ?? string.Empty,
+            videoCodecTag = mediaInfo?.CodecTagString ?? string.Empty,
+            videoProfile = mediaInfo?.Profile ?? string.Empty,
             runtimeDiagnostics = VideoEditorRuntimeDiagnosticsCollector.Capture(),
             watermark = _options.WatermarkSettings != null ? new
             {

@@ -8,10 +8,20 @@ import TimelineScrubber from './components/TimelineScrubber'
 import ToolPanel from './components/ToolPanel'
 import ExportOverlay from './components/ExportOverlay'
 
+const WINDOWS_CODEC_GUIDANCE_URL =
+  'https://support.microsoft.com/en-us/windows/codecs-in-media-player-d5c2cdcd-83a2-4805-abb0-c6888138e456'
+
 const DEFAULT_STATE: EditorState = {
   videoUrl: '',
+  hostPlatform: 'Unknown',
+  videoCodec: '',
+  videoCodecTag: '',
+  videoProfile: '',
   ffmpegAvailable: false,
   ffmpegPath: '',
+  playbackWarning: '',
+  playbackHelpUrl: '',
+  playbackError: '',
   runtimeDiagnostics: null,
   watermarkConfig: null,
   theme: 'Dark',
@@ -49,6 +59,75 @@ function applyTheme(theme: EditorState['theme']) {
   }
 }
 
+function getPlaybackProbeMime(codecName: string, codecTag: string): string {
+  switch (codecName.toLowerCase()) {
+    case 'h264':
+      return 'video/mp4; codecs="avc1"'
+    case 'hevc':
+    case 'h265':
+      return `video/mp4; codecs="${codecTag || 'hvc1'}"`
+    case 'vp9':
+      return 'video/mp4; codecs="vp09"'
+    case 'av1':
+      return 'video/mp4; codecs="av01"'
+    default:
+      return ''
+  }
+}
+
+function getCodecDisplayName(codecName: string, profile: string): string {
+  const normalized = codecName.toLowerCase()
+  const baseName = normalized === 'hevc'
+    ? 'HEVC (H.265)'
+    : normalized === 'h264'
+      ? 'H.264'
+      : normalized === 'vp9'
+        ? 'VP9'
+        : normalized === 'av1'
+          ? 'AV1'
+          : codecName
+
+  return profile ? `${baseName} ${profile}` : baseName
+}
+
+function buildPlaybackSupportMessage(
+  codecName: string,
+  profile: string,
+  hostPlatform: EditorState['hostPlatform'],
+): string {
+  const displayName = getCodecDisplayName(codecName, profile)
+
+  if (codecName.toLowerCase() === 'hevc' && hostPlatform === 'Windows') {
+    return `This editor runtime cannot decode ${displayName} on this machine. Windows usually needs the HEVC Video Extension from Microsoft Store before embedded HEVC playback will work.`
+  }
+
+  return `This editor runtime cannot decode ${displayName}. The file is still valid, but embedded playback is unavailable in this environment.`
+}
+
+function buildPlaybackErrorMessage(
+  codecName: string,
+  profile: string,
+  hostPlatform: EditorState['hostPlatform'],
+  errorCode: number | undefined,
+  compatibilityWarning: string,
+): string {
+  if (compatibilityWarning) {
+    return compatibilityWarning
+  }
+
+  const displayName = codecName ? getCodecDisplayName(codecName, profile) : 'this video'
+  switch (errorCode) {
+    case 3:
+      return codecName.toLowerCase() === 'hevc' && hostPlatform === 'Windows'
+        ? `The embedded player hit a decode error while loading ${displayName}. Windows may need the HEVC Video Extension for embedded playback.`
+        : `The embedded player hit a decode error while loading ${displayName}.`
+    case 4:
+      return `The embedded player does not support ${displayName}.`
+    default:
+      return `The embedded player could not load ${displayName}.`
+  }
+}
+
 export default function App() {
   const [state, setState] = useState<EditorState>(DEFAULT_STATE)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -63,9 +142,16 @@ export default function App() {
         setState(s => ({
           ...s,
           videoUrl: msg.videoUrl,
+          hostPlatform: msg.hostPlatform ?? 'Unknown',
+          videoCodec: msg.videoCodec ?? '',
+          videoCodecTag: msg.videoCodecTag ?? '',
+          videoProfile: msg.videoProfile ?? '',
           theme: msg.theme,
           ffmpegAvailable: msg.ffmpegAvailable,
           ffmpegPath: msg.ffmpegPath ?? '',
+          playbackWarning: '',
+          playbackHelpUrl: '',
+          playbackError: '',
           runtimeDiagnostics: msg.runtimeDiagnostics ?? null,
           watermarkConfig: msg.watermark ?? null,
           watermarkText: msg.watermark?.text ?? '',
@@ -115,6 +201,47 @@ export default function App() {
     send({ type: 'ready' })
   }, [send])
 
+  useEffect(() => {
+    const codecName = state.videoCodec.trim().toLowerCase()
+    if (!codecName) {
+      setState(s => {
+        if (!s.playbackWarning && !s.playbackHelpUrl) {
+          return s
+        }
+
+        return {
+          ...s,
+          playbackWarning: '',
+          playbackHelpUrl: '',
+        }
+      })
+      return
+    }
+
+    const probeMime = getPlaybackProbeMime(codecName, state.videoCodecTag)
+    if (!probeMime) {
+      return
+    }
+
+    const canPlay = document.createElement('video').canPlayType(probeMime)
+    const warning = canPlay ? '' : buildPlaybackSupportMessage(codecName, state.videoProfile, state.hostPlatform)
+    const helpUrl = canPlay || codecName !== 'hevc' || state.hostPlatform !== 'Windows'
+      ? ''
+      : WINDOWS_CODEC_GUIDANCE_URL
+
+    setState(s => {
+      if (s.playbackWarning === warning && s.playbackHelpUrl === helpUrl) {
+        return s
+      }
+
+      return {
+        ...s,
+        playbackWarning: warning,
+        playbackHelpUrl: helpUrl,
+      }
+    })
+  }, [state.hostPlatform, state.videoCodec, state.videoCodecTag, state.videoProfile])
+
   // ── Sync video element duration once loaded ─────────────────────────────────
 
   const onVideoDurationChange = useCallback(() => {
@@ -148,6 +275,41 @@ export default function App() {
         ...s,
         isPlaying,
         position,
+      }
+    })
+  }, [])
+
+  const onPlaybackReady = useCallback(() => {
+    setState(s => {
+      if (!s.playbackError) {
+        return s
+      }
+
+      return {
+        ...s,
+        playbackError: '',
+      }
+    })
+  }, [])
+
+  const onPlaybackError = useCallback((errorCode?: number) => {
+    setState(s => {
+      const message = buildPlaybackErrorMessage(
+        s.videoCodec,
+        s.videoProfile,
+        s.hostPlatform,
+        errorCode,
+        s.playbackWarning,
+      )
+
+      if (s.playbackError === message && !s.isPlaying) {
+        return s
+      }
+
+      return {
+        ...s,
+        isPlaying: false,
+        playbackError: message,
       }
     })
   }, [])
@@ -251,13 +413,18 @@ export default function App() {
           <VideoPlayer
             videoRef={videoRef}
             videoUrl={state.videoUrl}
+            videoCodec={state.videoCodec}
             isExporting={state.isExporting}
             exportProgress={state.exportProgress}
             exportStatusMessage={state.exportStatusMessage}
             isCropMode={state.isCropMode}
+            playbackIssueMessage={state.playbackError || state.playbackWarning}
+            playbackHelpUrl={state.playbackHelpUrl}
             onDurationChange={onVideoDurationChange}
             onTimeUpdate={onVideoTimeUpdate}
             onPlaybackStateChange={syncPlaybackState}
+            onPlaybackReady={onPlaybackReady}
+            onPlaybackError={onPlaybackError}
             onCancelExport={cancelExport}
           />
 
