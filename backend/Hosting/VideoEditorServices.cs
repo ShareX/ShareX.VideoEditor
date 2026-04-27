@@ -32,10 +32,16 @@ namespace ShareX.VideoEditor.Hosting;
 /// </summary>
 public static class VideoEditorServices
 {
+    private static readonly AsyncLocal<IVideoEditorDiagnosticsSink?> DiagnosticsCurrent = new();
+
     /// <summary>
     /// Optional diagnostics sink. Host applications may set this before opening the editor.
     /// </summary>
-    public static IVideoEditorDiagnosticsSink? Diagnostics { get; set; }
+    public static IVideoEditorDiagnosticsSink? Diagnostics
+    {
+        get => DiagnosticsCurrent.Value;
+        set => DiagnosticsCurrent.Value = value;
+    }
 
     public static void ReportInformation(string source, string message)
         => ReportDiagnostic(VideoEditorDiagnosticLevel.Information, source, message, null);

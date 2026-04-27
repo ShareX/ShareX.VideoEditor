@@ -50,7 +50,7 @@ export default function Header({
         </GlassPill>
 
         <div className="flex items-center gap-3 flex-1 justify-center" aria-live="polite" aria-atomic="true">
-          {isExporting && (
+          {isExporting ? (
             <GlassPill className="h-8 px-4 gap-3">
               <span className="text-xs text-amber-400 font-medium">{exportStatusMessage}</span>
               <div
@@ -69,7 +69,13 @@ export default function Header({
                 {Math.round(exportProgress)}%
               </span>
             </GlassPill>
-          )}
+          ) : exportStatusMessage ? (
+            <GlassPill className="h-8 px-4 gap-2">
+              <span className="text-xs text-amber-400 font-medium max-w-[360px] truncate">
+                {exportStatusMessage}
+              </span>
+            </GlassPill>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2.5">

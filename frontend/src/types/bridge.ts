@@ -42,6 +42,9 @@ export interface ConfigMessage {
   ffmpegAvailable: boolean
   /** Path supplied by VideoEditorOptions.FFmpegPath (empty if not set). */
   ffmpegPath?: string
+  ffprobeAvailable?: boolean
+  /** Path supplied/resolved by VideoEditorOptions.FFprobePath (empty if not set). */
+  ffprobePath?: string
   runtimeDiagnostics?: RuntimeDiagnosticsSnapshot | null
   watermark?: WatermarkConfig | null
 }
@@ -118,6 +121,8 @@ export interface EditorState {
   videoUrl: string
   ffmpegAvailable: boolean
   ffmpegPath: string
+  ffprobeAvailable: boolean
+  ffprobePath: string
   runtimeDiagnostics: RuntimeDiagnosticsSnapshot | null
   watermarkConfig: WatermarkConfig | null
   theme: ConfigMessage['theme']

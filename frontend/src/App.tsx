@@ -12,6 +12,8 @@ const DEFAULT_STATE: EditorState = {
   videoUrl: '',
   ffmpegAvailable: false,
   ffmpegPath: '',
+  ffprobeAvailable: false,
+  ffprobePath: '',
   runtimeDiagnostics: null,
   watermarkConfig: null,
   theme: 'Dark',
@@ -40,6 +42,8 @@ const DEFAULT_STATE: EditorState = {
   activePanel: 'trim',
 }
 
+const MIN_TRIM_SECONDS = 0.1
+
 function applyTheme(theme: EditorState['theme']) {
   const el = document.documentElement
   if (theme === 'System') {
@@ -53,6 +57,7 @@ export default function App() {
   const [state, setState] = useState<EditorState>(DEFAULT_STATE)
   const videoRef = useRef<HTMLVideoElement>(null)
   const send = useSend()
+  const canExport = state.ffmpegAvailable && !state.isExporting
 
   // ── Inbound messages from C# ────────────────────────────────────────────────
 
@@ -66,6 +71,8 @@ export default function App() {
           theme: msg.theme,
           ffmpegAvailable: msg.ffmpegAvailable,
           ffmpegPath: msg.ffmpegPath ?? '',
+          ffprobeAvailable: msg.ffprobeAvailable ?? false,
+          ffprobePath: msg.ffprobePath ?? '',
           runtimeDiagnostics: msg.runtimeDiagnostics ?? null,
           watermarkConfig: msg.watermark ?? null,
           watermarkText: msg.watermark?.text ?? '',
@@ -102,7 +109,7 @@ export default function App() {
         break
 
       case 'exportError':
-        setState(s => ({ ...s, isExporting: false, exportProgress: 0, exportStatusMessage: 'Export failed' }))
+        setState(s => ({ ...s, isExporting: false, exportProgress: 0, exportStatusMessage: msg.message || 'Export failed' }))
         break
     }
   }, [])
@@ -189,9 +196,38 @@ export default function App() {
     setState(s => ({ ...s, volume: v }))
   }, [])
 
+  const setTrimStart = useCallback((value: number) => {
+    setState(s => {
+      const trimEnd = s.trimEnd > 0 ? s.trimEnd : s.duration
+      const maxStart = Math.max(0, trimEnd - MIN_TRIM_SECONDS)
+
+      return {
+        ...s,
+        trimStart: Math.max(0, Math.min(value, maxStart)),
+        isTrimActive: true,
+      }
+    })
+  }, [])
+
+  const setTrimEnd = useCallback((value: number) => {
+    setState(s => {
+      const minEnd = Math.min(s.duration, s.trimStart + MIN_TRIM_SECONDS)
+
+      return {
+        ...s,
+        trimEnd: Math.max(minEnd, Math.min(value, s.duration)),
+        isTrimActive: true,
+      }
+    })
+  }, [])
+
   // ── Export ──────────────────────────────────────────────────────────────────
 
   const requestExport = useCallback(() => {
+    if (state.isExporting || !state.ffmpegAvailable) {
+      return
+    }
+
     send({
       type: 'requestExport',
       isTrimActive: state.isTrimActive,
@@ -219,19 +255,29 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      const target = e.target
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLButtonElement ||
+        (target instanceof Element && target.closest('[contenteditable="true"],[role="button"],[role="switch"]'))
+      ) {
+        return
+      }
+
       switch (e.key) {
         case ' ':        e.preventDefault(); togglePlayPause(); break
         case 'ArrowLeft': e.preventDefault(); skipBack(); break
         case 'ArrowRight': e.preventDefault(); skipForward(); break
-        case 'i': setState(s => ({ ...s, isTrimActive: true, trimStart: s.position })); break
-        case 'o': setState(s => ({ ...s, isTrimActive: true, trimEnd: s.position })); break
-        case 'e': if (e.ctrlKey) { e.preventDefault(); if (!state.isExporting) requestExport() } break
+        case 'i': setTrimStart(state.position); break
+        case 'o': setTrimEnd(state.position); break
+        case 'e': if (e.ctrlKey) { e.preventDefault(); if (canExport) requestExport() } break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [togglePlayPause, skipBack, skipForward, requestExport, state.isExporting])
+  }, [canExport, requestExport, setTrimEnd, setTrimStart, skipBack, skipForward, state.position, togglePlayPause])
 
   return (
     <div className="relative flex flex-col w-full h-full bg-ve-base select-none overflow-hidden">
@@ -255,6 +301,12 @@ export default function App() {
             exportProgress={state.exportProgress}
             exportStatusMessage={state.exportStatusMessage}
             isCropMode={state.isCropMode}
+            isCropActive={state.isCropActive}
+            cropX={state.cropX}
+            cropY={state.cropY}
+            cropWidth={state.cropWidth}
+            cropHeight={state.cropHeight}
+            onCropChange={crop => setState(s => ({ ...s, ...crop, isCropActive: true }))}
             onDurationChange={onVideoDurationChange}
             onTimeUpdate={onVideoTimeUpdate}
             onPlaybackStateChange={syncPlaybackState}
@@ -280,10 +332,10 @@ export default function App() {
             isTrimActive={state.isTrimActive}
             thumbnails={state.thumbnails}
             onSeek={seekTo}
-            onTrimStartChange={v => setState(s => ({ ...s, trimStart: v, isTrimActive: true }))}
-            onTrimEndChange={v => setState(s => ({ ...s, trimEnd: v, isTrimActive: true }))}
-            onSetTrimStart={() => setState(s => ({ ...s, trimStart: s.position, isTrimActive: true }))}
-            onSetTrimEnd={() => setState(s => ({ ...s, trimEnd: s.position, isTrimActive: true }))}
+            onTrimStartChange={setTrimStart}
+            onTrimEndChange={setTrimEnd}
+            onSetTrimStart={() => setTrimStart(state.position)}
+            onSetTrimEnd={() => setTrimEnd(state.position)}
             onResetTrim={() => setState(s => ({ ...s, isTrimActive: false, trimStart: 0, trimEnd: s.duration }))}
           />
         </div>

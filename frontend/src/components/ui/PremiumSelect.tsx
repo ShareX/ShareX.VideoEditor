@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { SelectHTMLAttributes } from 'react'
 
 interface PremiumSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -5,15 +6,19 @@ interface PremiumSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[]
 }
 
-export function PremiumSelect({ label, options, className = '', ...props }: PremiumSelectProps) {
+export function PremiumSelect({ label, options, className = '', id, ...props }: PremiumSelectProps) {
+  const generatedId = useId()
+  const selectId = id ?? generatedId
+
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="text-[11px] font-medium text-ve-secondary tracking-wide">
+        <label htmlFor={selectId} className="text-[11px] font-medium text-ve-secondary tracking-wide">
           {label}
         </label>
       )}
       <select
+        id={selectId}
         className={`
           w-full h-9 px-3 text-xs text-ve-text
           bg-ve-elevated/60 rounded-xl

@@ -88,12 +88,15 @@ public static class VideoEditorHost
         if (string.IsNullOrWhiteSpace(options.VideoPath))
             throw new ArgumentException("VideoEditorOptions.VideoPath must be set.", nameof(options));
 
-        VideoEditorServices.Diagnostics = events?.DiagnosticReported != null
+        IVideoEditorDiagnosticsSink? diagnostics = events?.DiagnosticReported != null
             ? new DelegateVideoEditorDiagnosticsSink(events.DiagnosticReported)
             : null;
 
         var thread = new Thread(() =>
         {
+            IVideoEditorDiagnosticsSink? previousDiagnostics = VideoEditorServices.Diagnostics;
+            VideoEditorServices.Diagnostics = diagnostics;
+
             try
             {
                 new VideoEditorSession(options, events).Run();
@@ -104,6 +107,10 @@ public static class VideoEditorHost
 
                 try { events?.ExportFailed?.Invoke(ex); } catch { }
                 try { events?.EditorClosed?.Invoke(); } catch { }
+            }
+            finally
+            {
+                VideoEditorServices.Diagnostics = previousDiagnostics;
             }
         })
         {
@@ -440,7 +447,11 @@ internal sealed class VideoEditorSession
             "Export Video",
             Path.GetFileNameWithoutExtension(_options.VideoPath) + "_edited." + ext,
             new[] { (payload.OutputFormat + " File", new[] { "*." + ext }) });
-        if (string.IsNullOrWhiteSpace(outputPath)) return;
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            Send(new { type = "exportCancelled" });
+            return;
+        }
 
         _exportCts?.Cancel();
         _exportCts = new CancellationTokenSource();

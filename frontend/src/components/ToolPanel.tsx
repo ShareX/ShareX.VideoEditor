@@ -175,6 +175,17 @@ function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange
         title={state.ffmpegPath || 'VideoEditorOptions.FFmpegPath was not provided by the host.'}
       />
 
+      <PremiumInput
+        label="FFprobe Path"
+        value={state.ffprobePath || '(not set)'}
+        readOnly
+        title={
+          state.ffprobeAvailable
+            ? state.ffprobePath
+            : 'VideoEditorOptions.FFprobePath was not provided by the host or could not be resolved.'
+        }
+      />
+
       <PremiumSelect
         label="Format"
         value={state.outputFormat}

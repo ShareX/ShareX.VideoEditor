@@ -6,9 +6,9 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>ShareX.VideoEditor</RootNamespace>
     <AssemblyName>ShareX.VideoEditor</AssemblyName>
-    <!-- Skip WebUI build by default so C# compiles independently of Node.js.
-         Set BuildWebUI=true (or any non-false value) to also build the frontend. -->
-    <BuildWebUI Condition="'$(BuildWebUI)' == ''">false</BuildWebUI>
+    <!-- Build the embedded WebUI by default so clean host builds produce runnable editor assets.
+         Set BuildWebUI=false to compile only the C# library. -->
+    <BuildWebUI Condition="'$(BuildWebUI)' == ''">true</BuildWebUI>
     <WebUIDistDir>$(MSBuildProjectDirectory)/../frontend/dist</WebUIDistDir>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">node.exe</NodeExecutable>
     <NodeExecutable Condition="'$(NodeExecutable)' == '' and Exists('$(HOME)/.local/bin/node')">$(HOME)/.local/bin/node</NodeExecutable>
@@ -38,12 +38,12 @@
   <!-- ── WebUI build integration ────────────────────────────────────────────── -->
   <!-- Runs `npm ci && npm run build` inside frontend/ before the C# build.  -->
   <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
-  <Target Name="ValidateNodeVersion" BeforeTargets="BuildWebUI" Condition="'$(BuildWebUI)' == 'true'">
+  <Target Name="ValidateNodeVersion" BeforeTargets="BuildWebUI" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
     <Message Text="[VideoEditor] Validating Node.js version for Vite 8..." Importance="high" />
     <Exec Command="&quot;$(NodeExecutable)&quot; -e &quot;const version = process.versions.node.split('.').map(Number); const ok = version[0] &gt; 22 || (version[0] === 22 ? version[1] &gt;= 12 : version[0] === 20 ? version[1] &gt;= 19 : false); if (!ok) { console.error('Vite 8 requires Node.js ^20.19.0 || >=22.12.0. Found ' + process.versions.node + '.'); process.exit(1); }&quot;" />
   </Target>
 
-  <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true'">
+  <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
     <Message Text="[VideoEditor] Building WebUI with $(NpmCommandPrefix)..." Importance="high" />
     <Exec Command="$(NpmCommandPrefix) ci"
           WorkingDirectory="$(MSBuildProjectDirectory)/../frontend"

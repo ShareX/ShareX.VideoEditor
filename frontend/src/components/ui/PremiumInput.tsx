@@ -1,18 +1,23 @@
+import { useId } from 'react'
 import type { InputHTMLAttributes } from 'react'
 
 interface PremiumInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
 }
 
-export function PremiumInput({ label, className = '', ...props }: PremiumInputProps) {
+export function PremiumInput({ label, className = '', id, ...props }: PremiumInputProps) {
+  const generatedId = useId()
+  const inputId = id ?? generatedId
+
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="text-[11px] font-medium text-ve-secondary tracking-wide">
+        <label htmlFor={inputId} className="text-[11px] font-medium text-ve-secondary tracking-wide">
           {label}
         </label>
       )}
       <input
+        id={inputId}
         className={`
           w-full h-9 px-3 text-xs text-ve-text
           bg-ve-elevated/60 rounded-xl

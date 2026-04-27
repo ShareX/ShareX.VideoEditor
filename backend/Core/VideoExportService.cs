@@ -101,38 +101,52 @@ public class VideoExportService
             totalSeconds = 1;
         }
 
-        await using (cancellationToken.Register(() =>
+        try
         {
-            try { if (!process.HasExited) process.Kill(); } catch { }
-        }))
-        {
-            string? line;
-            while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
+            await using (cancellationToken.Register(() =>
             {
-                var progress = ParseProgressLine(line, totalSeconds);
-                if (progress != null)
+                try { if (!process.HasExited) process.Kill(); } catch { }
+            }))
+            {
+                string? line;
+                while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
                 {
-                    onProgress?.Invoke(progress);
+                    var progress = ParseProgressLine(line, totalSeconds);
+                    if (progress != null)
+                    {
+                        onProgress?.Invoke(progress);
+                    }
                 }
+
+                await process.WaitForExitAsync(cancellationToken);
             }
 
-            await process.WaitForExitAsync(cancellationToken);
-        }
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            if (File.Exists(outputPath))
+            if (cancellationToken.IsCancellationRequested)
             {
-                try { File.Delete(outputPath); } catch { }
+                DeletePartialOutput(outputPath);
+                throw new OperationCanceledException(cancellationToken);
             }
 
-            throw new OperationCanceledException(cancellationToken);
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"FFmpeg exited with code {process.ExitCode}.");
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            DeletePartialOutput(outputPath);
+            throw;
+        }
+    }
+
+    private static void DeletePartialOutput(string outputPath)
+    {
+        if (!File.Exists(outputPath))
+        {
+            return;
         }
 
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"FFmpeg exited with code {process.ExitCode}.");
-        }
+        try { File.Delete(outputPath); } catch { }
     }
 
     // ── Argument builder ─────────────────────────────────────────────────────
