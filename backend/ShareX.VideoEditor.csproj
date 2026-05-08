@@ -23,6 +23,7 @@
     <NpmCommandPrefix Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(NpmExecutable)' == 'npm.cmd'">npm.cmd</NpmCommandPrefix>
     <NpmCommandPrefix Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(NpmExecutable)' != 'npm.cmd'">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
     <NpmCommandPrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">&quot;$(NpmExecutable)&quot;</NpmCommandPrefix>
+    <WebUIDependencyScript>$(MSBuildProjectDirectory)/../scripts/ensure-webui-deps.mjs</WebUIDependencyScript>
     <NodeExecutableDirectory>$([System.IO.Path]::GetDirectoryName('$(NodeExecutable)'))</NodeExecutableDirectory>
     <NpmEnvironmentVariables Condition="!$([MSBuild]::IsOSPlatform('Windows')) and '$(NodeExecutableDirectory)' != ''">PATH=$(NodeExecutableDirectory):$(PATH)</NpmEnvironmentVariables>
   </PropertyGroup>
@@ -36,18 +37,22 @@
   </ItemGroup>
 
   <!-- ── WebUI build integration ────────────────────────────────────────────── -->
-  <!-- Runs `npm ci && npm run build` inside frontend/ before the C# build.  -->
+  <!-- Runs `npm ci` when dependencies are missing/stale, then builds frontend/. -->
   <!-- Set <BuildWebUI>false</BuildWebUI> to skip (e.g. when dist is pre-built) -->
-  <Target Name="ValidateNodeVersion" BeforeTargets="BuildWebUI" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
+  <Target Name="ValidateNodeVersion" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
     <Message Text="[VideoEditor] Validating Node.js version for Vite 8..." Importance="high" />
     <Exec Command="&quot;$(NodeExecutable)&quot; -e &quot;const version = process.versions.node.split('.').map(Number); const ok = version[0] &gt; 22 || (version[0] === 22 ? version[1] &gt;= 12 : version[0] === 20 ? version[1] &gt;= 19 : false); if (!ok) { console.error('Vite 8 requires Node.js ^20.19.0 || >=22.12.0. Found ' + process.versions.node + '.'); process.exit(1); }&quot;" />
   </Target>
 
-  <Target Name="BuildWebUI" BeforeTargets="Build" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
-    <Message Text="[VideoEditor] Building WebUI with $(NpmCommandPrefix)..." Importance="high" />
-    <Exec Command="$(NpmCommandPrefix) ci"
+  <Target Name="RestoreWebUIDependencies"
+          Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
+    <Exec Command="&quot;$(NodeExecutable)&quot; &quot;$(WebUIDependencyScript)&quot; &quot;$(NpmExecutable)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)/../frontend"
           EnvironmentVariables="$(NpmEnvironmentVariables)" />
+  </Target>
+
+  <Target Name="BuildWebUI" BeforeTargets="Build" DependsOnTargets="ValidateNodeVersion;RestoreWebUIDependencies" Condition="'$(BuildWebUI)' == 'true' and '$(TargetFramework)' != ''">
+    <Message Text="[VideoEditor] Building WebUI with $(NpmCommandPrefix)..." Importance="high" />
     <Exec Command="$(NpmCommandPrefix) run build"
           WorkingDirectory="$(MSBuildProjectDirectory)/../frontend"
           EnvironmentVariables="$(NpmEnvironmentVariables)" />
