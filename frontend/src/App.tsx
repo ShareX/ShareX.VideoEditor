@@ -32,7 +32,7 @@ const DEFAULT_STATE: EditorState = {
   cropWidth: 0,
   cropHeight: 0,
   outputFormat: 'MP4',
-  fps: 30,
+  fps: 0,
   qualityScale: 1.0,
   watermarkEnabled: false,
   watermarkText: '',

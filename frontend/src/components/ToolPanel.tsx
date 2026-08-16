@@ -195,12 +195,12 @@ function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange
 
       <PremiumSlider
         label="Frame Rate"
-        displayValue={`${state.fps} fps`}
-        min={1}
+        displayValue={state.fps > 0 ? `${state.fps} fps` : 'Source'}
+        min={0}
         max={60}
         step={1}
         value={state.fps}
-        onChange={e => onChange({ fps: parseInt(e.target.value) })}
+        onChange={e => onChange({ fps: parseInt(e.target.value, 10) || 0 })}
       />
 
       <PremiumSlider
