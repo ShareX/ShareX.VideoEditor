@@ -53,6 +53,12 @@ public class VideoExportOptions
     public double OutputFps { get; set; }
     public double QualityScale { get; set; } = 1.0;
 
+    /// <summary>
+    /// Optional encoder override (e.g. "libvpx" when VP9 is unavailable).
+    /// Empty uses the format default.
+    /// </summary>
+    public string VideoCodec { get; set; } = string.Empty;
+
     // Watermark
     public WatermarkSettings? Watermark { get; set; }
     public string WatermarkText { get; set; } = string.Empty;

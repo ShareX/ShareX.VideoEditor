@@ -60,6 +60,7 @@ public class VideoExportService
         Action<VideoExportProgress>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
+        ApplyFormatCapabilities(options);
         string args = FfmpegArgumentBuilder.Build(options);
         TimeSpan expectedDuration = options.IsTrimActive && options.TrimEnd > options.TrimStart
             ? options.TrimEnd - options.TrimStart
@@ -101,6 +102,8 @@ public class VideoExportService
             totalSeconds = 1;
         }
 
+        var errorTail = new Queue<string>();
+
         try
         {
             await using (cancellationToken.Register(() =>
@@ -111,6 +114,7 @@ public class VideoExportService
                 string? line;
                 while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
                 {
+                    RememberErrorLine(errorTail, line);
                     var progress = ParseProgressLine(line, totalSeconds);
                     if (progress != null)
                     {
@@ -129,7 +133,7 @@ public class VideoExportService
 
             if (process.ExitCode != 0)
             {
-                throw new InvalidOperationException($"FFmpeg exited with code {process.ExitCode}.");
+                throw new InvalidOperationException(FormatFfmpegFailure(process.ExitCode, errorTail));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -147,6 +151,66 @@ public class VideoExportService
         }
 
         try { File.Delete(outputPath); } catch { }
+    }
+
+    private void ApplyFormatCapabilities(VideoExportOptions options)
+    {
+        FfmpegCapabilitySnapshot capabilities = FfmpegCapabilityProbe.Probe(_ffmpegPath);
+        string format = string.IsNullOrWhiteSpace(options.OutputFormat) ? "MP4" : options.OutputFormat;
+
+        if (!capabilities.Supports(format))
+        {
+            string available = capabilities.AvailableFormats.Count == 0
+                ? "none"
+                : string.Join(", ", capabilities.AvailableFormats);
+            throw new InvalidOperationException(
+                $"FFmpeg cannot export {format}. Available formats: {available}.");
+        }
+
+        if (string.Equals(format, "WebM", StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(options.VideoCodec))
+        {
+            options.VideoCodec = capabilities.ResolveWebMCodec() ?? string.Empty;
+        }
+    }
+
+    private static void RememberErrorLine(Queue<string> errorTail, string line)
+    {
+        string trimmed = line.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return;
+        }
+
+        errorTail.Enqueue(trimmed);
+        while (errorTail.Count > 24)
+        {
+            errorTail.Dequeue();
+        }
+    }
+
+    private static string FormatFfmpegFailure(int exitCode, Queue<string> errorTail)
+    {
+        if (errorTail.Count == 0)
+        {
+            return $"FFmpeg exited with code {exitCode}.";
+        }
+
+        string[] interesting = errorTail
+            .Where(static line =>
+                line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Invalid", StringComparison.OrdinalIgnoreCase))
+            .TakeLast(4)
+            .ToArray();
+
+        string detail = interesting.Length > 0
+            ? string.Join(" ", interesting)
+            : string.Join(" ", errorTail.TakeLast(2));
+
+        return $"FFmpeg exited with code {exitCode}. {detail}";
     }
 
     // ── Progress parsing ─────────────────────────────────────────────────────

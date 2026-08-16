@@ -30,7 +30,7 @@ namespace ShareX.VideoEditor.Core;
 
 /// <summary>
 /// Builds FFmpeg CLI arguments for the advertised editor operations:
-/// trim, crop, format conversion, and text watermarking.
+/// trim, crop, format conversion, and text/image watermarking.
 /// </summary>
 public static class FfmpegArgumentBuilder
 {
@@ -38,57 +38,66 @@ public static class FfmpegArgumentBuilder
     {
         ArgumentNullException.ThrowIfNull(opts);
 
-        var sb = new StringBuilder();
+        bool hasImageWatermark = TryResolveImageWatermarkPath(opts, out string? imagePath);
+        var preprocess = BuildPreprocessFilters(opts);
+        bool hasText = TryBuildDrawTextFilter(opts, out string? drawText);
+        bool isGif = string.Equals(opts.OutputFormat, "GIF", StringComparison.OrdinalIgnoreCase);
+        bool isAudioLess = isGif || string.Equals(opts.OutputFormat, "WEBP", StringComparison.OrdinalIgnoreCase);
 
-        if (opts.IsTrimActive)
+        var sb = new StringBuilder();
+        AppendInputs(sb, opts, hasImageWatermark ? imagePath : null);
+
+        if (hasImageWatermark)
         {
-            sb.Append("-ss ").Append(FormatTimestamp(opts.TrimStart)).Append(' ');
-            sb.Append("-i ").Append(Quote(opts.InputPath)).Append(' ');
-            sb.Append("-t ").Append(FormatTimestamp(opts.TrimEnd - opts.TrimStart)).Append(' ');
+            string graph = BuildOverlayFilterGraph(preprocess, opts, drawText, isGif);
+            sb.Append("-filter_complex ").Append(Quote(graph)).Append(' ');
+            sb.Append("-map [vout] ");
+            if (!isAudioLess)
+            {
+                sb.Append("-map 0:a? ");
+            }
         }
         else
         {
-            sb.Append("-i ").Append(Quote(opts.InputPath)).Append(' ');
-        }
+            var filters = new List<string>(preprocess);
+            if (hasText)
+            {
+                filters.Add(drawText!);
+            }
 
-        var filters = new List<string>();
+            if (isGif)
+            {
+                filters.Add("split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
+            }
 
-        if (opts.IsCropActive && TryNormalizeCrop(opts, out int cropX, out int cropY, out int cropWidth, out int cropHeight))
-        {
-            filters.Add($"crop={cropWidth}:{cropHeight}:{cropX}:{cropY}");
-        }
-
-        // 0 (or negative) preserves the source frame rate.
-        if (opts.OutputFps > 0)
-        {
-            filters.Add($"fps={opts.OutputFps.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (Math.Abs(opts.QualityScale - 1.0) > 0.01)
-        {
-            string scale = opts.QualityScale.ToString(CultureInfo.InvariantCulture);
-            filters.Add($"scale=iw*{scale}:ih*{scale}:flags=lanczos");
-        }
-
-        if (TryBuildDrawTextFilter(opts, out string? drawText))
-        {
-            filters.Add(drawText!);
-        }
-
-        bool isGif = string.Equals(opts.OutputFormat, "GIF", StringComparison.OrdinalIgnoreCase);
-        if (isGif)
-        {
-            filters.Add("split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
-        }
-
-        if (filters.Count > 0)
-        {
-            sb.Append("-vf ").Append(Quote(string.Join(",", filters))).Append(' ');
+            if (filters.Count > 0)
+            {
+                sb.Append("-vf ").Append(Quote(string.Join(",", filters))).Append(' ');
+            }
         }
 
         AppendOutputCodec(sb, opts);
         sb.Append("-y ").Append(Quote(opts.OutputPath));
         return sb.ToString();
+    }
+
+    public static bool TryResolveImageWatermarkPath(VideoExportOptions opts, out string? imagePath)
+    {
+        imagePath = null;
+        string? candidate = opts.Watermark?.ImagePath;
+        if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate))
+        {
+            return false;
+        }
+
+        bool enabled = opts.Watermark?.Enabled == true || !string.IsNullOrWhiteSpace(opts.WatermarkText);
+        if (!enabled)
+        {
+            return false;
+        }
+
+        imagePath = Path.GetFullPath(candidate);
+        return true;
     }
 
     public static bool TryNormalizeCrop(
@@ -103,6 +112,100 @@ public static class FfmpegArgumentBuilder
         width = AlignEven(opts.CropWidth);
         height = AlignEven(opts.CropHeight);
         return width > 0 && height > 0;
+    }
+
+    private static void AppendInputs(StringBuilder sb, VideoExportOptions opts, string? imagePath)
+    {
+        if (opts.IsTrimActive)
+        {
+            sb.Append("-ss ").Append(FormatTimestamp(opts.TrimStart)).Append(' ');
+        }
+
+        sb.Append("-i ").Append(Quote(opts.InputPath)).Append(' ');
+
+        if (!string.IsNullOrWhiteSpace(imagePath))
+        {
+            sb.Append("-i ").Append(Quote(imagePath)).Append(' ');
+        }
+
+        if (opts.IsTrimActive)
+        {
+            sb.Append("-t ").Append(FormatTimestamp(opts.TrimEnd - opts.TrimStart)).Append(' ');
+        }
+    }
+
+    private static List<string> BuildPreprocessFilters(VideoExportOptions opts)
+    {
+        var filters = new List<string>();
+
+        if (opts.IsCropActive && TryNormalizeCrop(opts, out int cropX, out int cropY, out int cropWidth, out int cropHeight))
+        {
+            filters.Add($"crop={cropWidth}:{cropHeight}:{cropX}:{cropY}");
+        }
+
+        if (opts.OutputFps > 0)
+        {
+            filters.Add($"fps={opts.OutputFps.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (Math.Abs(opts.QualityScale - 1.0) > 0.01)
+        {
+            string scale = opts.QualityScale.ToString(CultureInfo.InvariantCulture);
+            filters.Add($"scale=iw*{scale}:ih*{scale}:flags=lanczos");
+        }
+
+        return filters;
+    }
+
+    private static string BuildOverlayFilterGraph(
+        List<string> preprocess,
+        VideoExportOptions opts,
+        string? drawText,
+        bool isGif)
+    {
+        var graph = new StringBuilder();
+        string videoLabel = "0:v";
+
+        if (preprocess.Count > 0)
+        {
+            graph.Append("[0:v]").Append(string.Join(",", preprocess)).Append("[base];");
+            videoLabel = "base";
+        }
+
+        double opacity = opts.Watermark?.Opacity is > 0 and <= 1
+            ? opts.Watermark.Opacity
+            : 0.8;
+        double px = opts.Watermark?.PositionX ?? 0.95;
+        double py = opts.Watermark?.PositionY ?? 0.95;
+
+        graph.Append("[1:v]format=rgba,colorchannelmixer=aa=")
+            .Append(opacity.ToString(CultureInfo.InvariantCulture))
+            .Append("[wm];");
+        graph.Append('[').Append(videoLabel).Append("][wm]overlay=x=(main_w-overlay_w)*")
+            .Append(px.ToString(CultureInfo.InvariantCulture))
+            .Append(":y=(main_h-overlay_h)*")
+            .Append(py.ToString(CultureInfo.InvariantCulture));
+
+        string current = "ov";
+        graph.Append('[').Append(current).Append(']');
+
+        if (!string.IsNullOrWhiteSpace(drawText))
+        {
+            graph.Append(";[").Append(current).Append(']').Append(drawText).Append("[txt]");
+            current = "txt";
+        }
+
+        if (isGif)
+        {
+            graph.Append(";[").Append(current)
+                .Append("]split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[vout]");
+        }
+        else if (current != "vout")
+        {
+            graph.Append(";[").Append(current).Append("]null[vout]");
+        }
+
+        return graph.ToString();
     }
 
     internal static string? ResolveDefaultFontFile()
@@ -123,7 +226,10 @@ public static class FfmpegArgumentBuilder
         switch (opts.OutputFormat.ToUpperInvariant())
         {
             case "WEBM":
-                sb.Append("-c:v libvpx-vp9 -crf 33 -b:v 0 -c:a libopus ");
+                string webmCodec = string.Equals(opts.VideoCodec, "libvpx", StringComparison.OrdinalIgnoreCase)
+                    ? "libvpx"
+                    : "libvpx-vp9";
+                sb.Append("-c:v ").Append(webmCodec).Append(" -crf 33 -b:v 0 -c:a libopus ");
                 break;
 
             case "GIF":
