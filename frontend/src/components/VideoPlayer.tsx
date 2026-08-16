@@ -14,6 +14,12 @@ interface VideoPlayerProps {
   cropY: number
   cropWidth: number
   cropHeight: number
+  watermarkEnabled: boolean
+  watermarkText: string
+  watermarkImageUrl: string
+  watermarkPositionX: number
+  watermarkPositionY: number
+  watermarkOpacity: number
   onCropChange: (crop: { cropX: number; cropY: number; cropWidth: number; cropHeight: number }) => void
   onDurationChange: () => void
   onTimeUpdate: () => void
@@ -48,6 +54,12 @@ export default function VideoPlayer({
   cropY,
   cropWidth,
   cropHeight,
+  watermarkEnabled,
+  watermarkText,
+  watermarkImageUrl,
+  watermarkPositionX,
+  watermarkPositionY,
+  watermarkOpacity,
   onCropChange,
   onDurationChange,
   onTimeUpdate,
@@ -125,22 +137,14 @@ export default function VideoPlayer({
   }, [getMetrics])
 
   useEffect(() => {
-    if (!isCropMode) {
-      return
-    }
-
     refreshVideoRect()
     ensureInitialCrop()
-  }, [ensureInitialCrop, isCropMode, refreshVideoRect])
+  }, [ensureInitialCrop, isCropMode, refreshVideoRect, videoUrl])
 
   useEffect(() => {
-    if (!isCropMode) {
-      return
-    }
-
     window.addEventListener('resize', refreshVideoRect)
     return () => window.removeEventListener('resize', refreshVideoRect)
-  }, [isCropMode, refreshVideoRect])
+  }, [refreshVideoRect])
 
   const activeCrop = useMemo<CropRect | null>(() => {
     const metrics = getMetrics()
@@ -307,6 +311,29 @@ export default function VideoPlayer({
             <CropHandle className="-right-2 -top-2 cursor-nesw-resize" onPointerDown={e => handleCropPointerDown(e, 'resize-ne')} />
             <CropHandle className="-left-2 -bottom-2 cursor-nesw-resize" onPointerDown={e => handleCropPointerDown(e, 'resize-sw')} />
             <CropHandle className="-right-2 -bottom-2 cursor-nwse-resize" onPointerDown={e => handleCropPointerDown(e, 'resize-se')} />
+          </div>
+        </div>
+      )}
+
+      {watermarkEnabled && overlayStyle && (watermarkText || watermarkImageUrl) && (
+        <div className="fixed z-10 pointer-events-none" style={overlayStyle}>
+          <div
+            className="absolute max-w-[45%] flex flex-col items-end gap-1"
+            style={{
+              left: `${Math.max(0, Math.min(1, watermarkPositionX)) * 100}%`,
+              top: `${Math.max(0, Math.min(1, watermarkPositionY)) * 100}%`,
+              transform: 'translate(-100%, -100%)',
+              opacity: Math.max(0.15, Math.min(1, watermarkOpacity)),
+            }}
+          >
+            {watermarkImageUrl && (
+              <img src={watermarkImageUrl} alt="" className="max-h-16 max-w-full object-contain drop-shadow" />
+            )}
+            {watermarkText && (
+              <span className="text-sm font-semibold text-white drop-shadow">
+                {watermarkText}
+              </span>
+            )}
           </div>
         </div>
       )}

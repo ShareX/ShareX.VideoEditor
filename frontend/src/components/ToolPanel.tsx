@@ -14,6 +14,7 @@ interface ToolPanelProps {
   state: EditorState
   onStateChange: (patch: Partial<EditorState>) => void
   onExport: () => void
+  onPickWatermarkImage: () => void
 }
 
 const TABS: { id: ActivePanel; label: string; icon: typeof Scissors }[] = [
@@ -23,7 +24,7 @@ const TABS: { id: ActivePanel; label: string; icon: typeof Scissors }[] = [
   { id: 'export', label: 'Export', icon: Settings },
 ]
 
-export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelProps) {
+export default function ToolPanel({ state, onStateChange, onExport, onPickWatermarkImage }: ToolPanelProps) {
   return (
     <aside className="flex flex-col w-72 shrink-0 bg-ve-surface/60 backdrop-blur-md border-l border-white/6">
       {/* Segmented tab bar */}
@@ -58,7 +59,9 @@ export default function ToolPanel({ state, onStateChange, onExport }: ToolPanelP
         <div className="animate-slide-up">
           {state.activePanel === 'trim' && <TrimPanel state={state} />}
           {state.activePanel === 'crop' && <CropPanel state={state} onChange={onStateChange} />}
-          {state.activePanel === 'watermark' && <WatermarkPanel state={state} onChange={onStateChange} />}
+          {state.activePanel === 'watermark' && (
+            <WatermarkPanel state={state} onChange={onStateChange} onPickImage={onPickWatermarkImage} />
+          )}
           {state.activePanel === 'export' && <ExportSettingsPanel state={state} onChange={onStateChange} />}
         </div>
       </div>
@@ -140,7 +143,19 @@ function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Part
   )
 }
 
-function WatermarkPanel({ state, onChange }: { state: EditorState; onChange: (p: Partial<EditorState>) => void }) {
+function WatermarkPanel({
+  state,
+  onChange,
+  onPickImage,
+}: {
+  state: EditorState
+  onChange: (p: Partial<EditorState>) => void
+  onPickImage: () => void
+}) {
+  const imageName = state.watermarkImagePath
+    ? state.watermarkImagePath.split(/[\\/]/).pop()
+    : ''
+
   return (
     <>
       <SectionLabel>Watermark</SectionLabel>
@@ -150,13 +165,24 @@ function WatermarkPanel({ state, onChange }: { state: EditorState; onChange: (p:
         label="Enable watermark"
       />
       {state.watermarkEnabled && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
           <PremiumInput
             label="Text"
             value={state.watermarkText}
             onChange={e => onChange({ watermarkText: e.target.value })}
             placeholder="Watermark text…"
           />
+          <PremiumButton
+            onClick={onPickImage}
+            variant="secondary"
+            size="md"
+            className="w-full"
+          >
+            {imageName ? 'Change image' : 'Choose image'}
+          </PremiumButton>
+          {imageName && (
+            <FieldRow label="Image">{imageName}</FieldRow>
+          )}
         </div>
       )}
     </>
@@ -190,7 +216,10 @@ function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange
         label="Format"
         value={state.outputFormat}
         onChange={e => onChange({ outputFormat: e.target.value as OutputFormat })}
-        options={OUTPUT_FORMATS.map(f => ({ value: f, label: f }))}
+        options={(state.availableFormats.length > 0 ? state.availableFormats : OUTPUT_FORMATS).map(f => ({
+          value: f,
+          label: f,
+        }))}
       />
 
       <PremiumSlider

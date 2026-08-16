@@ -209,6 +209,10 @@ internal sealed class VideoEditorSession
                     HandleExportRequest(payload);
                     break;
 
+                case "requestWatermarkImage":
+                    HandleWatermarkImageRequest();
+                    break;
+
                 case "cancelExport":
                     _exportCts?.Cancel();
                     break;
@@ -263,6 +267,10 @@ internal sealed class VideoEditorSession
                 $"FFprobe path does not exist: {_ffprobePath}");
         }
 
+        IReadOnlyList<string> availableFormats = _ffmpegAvailable
+            ? FfmpegCapabilityProbe.Probe(_ffmpegPath).AvailableFormats
+            : [];
+
         Send(new
         {
             type = "config",
@@ -273,12 +281,14 @@ internal sealed class VideoEditorSession
             ffmpegPath = _ffmpegPath,
             ffprobeAvailable = _ffprobeAvailable,
             ffprobePath = _ffprobePath,
+            availableFormats,
             runtimeDiagnostics = VideoEditorRuntimeDiagnosticsCollector.Capture(),
             watermark = _options.WatermarkSettings != null ? new
             {
                 enabled = _options.WatermarkSettings.Enabled,
                 text = _options.WatermarkSettings.Text,
                 imagePath = _options.WatermarkSettings.ImagePath,
+                imageUrl = ToFileUrl(_options.WatermarkSettings.ImagePath),
                 opacity = _options.WatermarkSettings.Opacity,
                 positionX = _options.WatermarkSettings.PositionX,
                 positionY = _options.WatermarkSettings.PositionY,
@@ -407,24 +417,103 @@ internal sealed class VideoEditorSession
             [(payload.OutputFormat + " File", new[] { "*." + ext })]);
     }
 
-    private VideoExportOptions BuildExportOptions(ExportPayload payload, string outputPath) => new()
+    private void HandleWatermarkImageRequest()
     {
-        InputPath = _options.VideoPath,
-        OutputPath = outputPath,
-        OutputFormat = payload.OutputFormat,
-        IsTrimActive = payload.IsTrimActive,
-        TrimStart = TimeSpan.FromSeconds(payload.TrimStart),
-        TrimEnd = TimeSpan.FromSeconds(payload.TrimEnd),
-        IsCropActive = payload.IsCropActive,
-        CropX = payload.CropX,
-        CropY = payload.CropY,
-        CropWidth = payload.CropWidth,
-        CropHeight = payload.CropHeight,
-        OutputFps = payload.Fps,
-        QualityScale = payload.QualityScale,
-        Watermark = payload.WatermarkEnabled ? _options.WatermarkSettings : null,
-        WatermarkText = payload.WatermarkEnabled ? payload.WatermarkText : string.Empty
-    };
+        string[]? selected = _window?.ShowOpenFile(
+            "Select watermark image",
+            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            false,
+            [("Image files", new[] { "*.png", "*.jpg", "*.jpeg", "*.webp" })]);
+
+        string? path = selected is { Length: > 0 } ? selected[0] : null;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            Send(new { type = "watermarkImageSelected", path = string.Empty, imageUrl = string.Empty });
+            return;
+        }
+
+        Send(new
+        {
+            type = "watermarkImageSelected",
+            path,
+            imageUrl = ToFileUrl(path)
+        });
+    }
+
+    private VideoExportOptions BuildExportOptions(ExportPayload payload, string outputPath)
+    {
+        WatermarkSettings? watermark = null;
+        if (payload.WatermarkEnabled)
+        {
+            watermark = CloneWatermark(_options.WatermarkSettings);
+            watermark.Enabled = true;
+            if (!string.IsNullOrWhiteSpace(payload.WatermarkText))
+            {
+                watermark.Text = payload.WatermarkText;
+            }
+
+            if (!string.IsNullOrWhiteSpace(payload.WatermarkImagePath))
+            {
+                watermark.ImagePath = payload.WatermarkImagePath;
+            }
+        }
+
+        return new VideoExportOptions
+        {
+            InputPath = _options.VideoPath,
+            OutputPath = outputPath,
+            OutputFormat = payload.OutputFormat,
+            IsTrimActive = payload.IsTrimActive,
+            TrimStart = TimeSpan.FromSeconds(payload.TrimStart),
+            TrimEnd = TimeSpan.FromSeconds(payload.TrimEnd),
+            IsCropActive = payload.IsCropActive,
+            CropX = payload.CropX,
+            CropY = payload.CropY,
+            CropWidth = payload.CropWidth,
+            CropHeight = payload.CropHeight,
+            OutputFps = payload.Fps,
+            QualityScale = payload.QualityScale,
+            Watermark = watermark,
+            WatermarkText = payload.WatermarkEnabled ? payload.WatermarkText : string.Empty
+        };
+    }
+
+    private static WatermarkSettings CloneWatermark(WatermarkSettings? source)
+    {
+        if (source == null)
+        {
+            return new WatermarkSettings { Enabled = true };
+        }
+
+        return new WatermarkSettings
+        {
+            Enabled = source.Enabled,
+            Text = source.Text,
+            ImagePath = source.ImagePath,
+            Opacity = source.Opacity,
+            PositionX = source.PositionX,
+            PositionY = source.PositionY,
+            FontSize = source.FontSize,
+            FontColor = source.FontColor
+        };
+    }
+
+    private static string ToFileUrl(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
 
     private static string ResolveWebUiPath()
     {

@@ -83,4 +83,7 @@ internal sealed class ExportPayload
 
     [JsonProperty("watermarkText")]
     public string WatermarkText { get; set; } = string.Empty;
+
+    [JsonProperty("watermarkImagePath")]
+    public string WatermarkImagePath { get; set; } = string.Empty;
 }

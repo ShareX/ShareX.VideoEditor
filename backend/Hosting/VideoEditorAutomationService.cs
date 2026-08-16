@@ -217,6 +217,17 @@ public class VideoEditorAutomationService
                 : request.WatermarkText)
             : string.Empty;
 
+        WatermarkSettings? watermark = null;
+        if (request.WatermarkEnabled)
+        {
+            watermark = request.Watermark ?? new WatermarkSettings();
+            watermark.Enabled = true;
+            if (!string.IsNullOrWhiteSpace(watermarkText))
+            {
+                watermark.Text = watermarkText;
+            }
+        }
+
         var exportOptions = new VideoExportOptions
         {
             InputPath = inputPath,
@@ -232,7 +243,7 @@ public class VideoEditorAutomationService
             CropHeight = request.CropHeight,
             OutputFps = request.OutputFps,
             QualityScale = request.QualityScale,
-            Watermark = request.WatermarkEnabled ? request.Watermark : null,
+            Watermark = watermark,
             WatermarkText = watermarkText
         };
 

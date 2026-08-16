@@ -36,6 +36,9 @@ const DEFAULT_STATE: EditorState = {
   qualityScale: 1.0,
   watermarkEnabled: false,
   watermarkText: '',
+  watermarkImagePath: '',
+  watermarkImageUrl: '',
+  availableFormats: ['MP4', 'WebM', 'GIF', 'WebP'],
   isExporting: false,
   exportProgress: 0,
   exportStatusMessage: '',
@@ -77,6 +80,21 @@ export default function App() {
           watermarkConfig: msg.watermark ?? null,
           watermarkText: msg.watermark?.text ?? '',
           watermarkEnabled: msg.watermark?.enabled ?? false,
+          watermarkImagePath: msg.watermark?.imagePath ?? '',
+          watermarkImageUrl: msg.watermark?.imageUrl ?? '',
+          availableFormats: msg.availableFormats?.length ? msg.availableFormats : ['MP4', 'WebM', 'GIF', 'WebP'],
+          outputFormat: msg.availableFormats?.includes(s.outputFormat)
+            ? s.outputFormat
+            : (msg.availableFormats?.[0] ?? s.outputFormat),
+        }))
+        break
+
+      case 'watermarkImageSelected':
+        setState(s => ({
+          ...s,
+          watermarkImagePath: msg.path,
+          watermarkImageUrl: msg.imageUrl,
+          watermarkEnabled: s.watermarkEnabled || !!msg.path,
         }))
         break
 
@@ -243,6 +261,7 @@ export default function App() {
       qualityScale: state.qualityScale,
       watermarkEnabled: state.watermarkEnabled,
       watermarkText: state.watermarkText,
+      watermarkImagePath: state.watermarkImagePath,
     })
     setState(s => ({ ...s, isExporting: true, exportProgress: 0, exportStatusMessage: 'Preparing…' }))
   }, [send, state])
@@ -306,6 +325,12 @@ export default function App() {
             cropY={state.cropY}
             cropWidth={state.cropWidth}
             cropHeight={state.cropHeight}
+            watermarkEnabled={state.watermarkEnabled}
+            watermarkText={state.watermarkText}
+            watermarkImageUrl={state.watermarkImageUrl}
+            watermarkPositionX={state.watermarkConfig?.positionX ?? 0.95}
+            watermarkPositionY={state.watermarkConfig?.positionY ?? 0.95}
+            watermarkOpacity={state.watermarkConfig?.opacity ?? 0.8}
             onCropChange={crop => setState(s => ({ ...s, ...crop, isCropActive: true }))}
             onDurationChange={onVideoDurationChange}
             onTimeUpdate={onVideoTimeUpdate}
@@ -344,6 +369,7 @@ export default function App() {
           state={state}
           onStateChange={patch => setState(s => ({ ...s, ...patch }))}
           onExport={requestExport}
+          onPickWatermarkImage={() => send({ type: 'requestWatermarkImage' })}
         />
       </div>
 

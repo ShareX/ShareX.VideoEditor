@@ -8,6 +8,7 @@ export interface WatermarkConfig {
   enabled: boolean
   text: string
   imagePath: string
+  imageUrl?: string
   opacity: number
   positionX: number
   positionY: number
@@ -45,8 +46,15 @@ export interface ConfigMessage {
   ffprobeAvailable?: boolean
   /** Path supplied/resolved by VideoEditorOptions.FFprobePath (empty if not set). */
   ffprobePath?: string
+  availableFormats?: OutputFormat[]
   runtimeDiagnostics?: RuntimeDiagnosticsSnapshot | null
   watermark?: WatermarkConfig | null
+}
+
+export interface WatermarkImageSelectedMessage {
+  type: 'watermarkImageSelected'
+  path: string
+  imageUrl: string
 }
 
 export interface ThumbnailsMessage {
@@ -82,6 +90,7 @@ export type InboundMessage =
   | ExportCompleteMessage
   | ExportCancelledMessage
   | ExportErrorMessage
+  | WatermarkImageSelectedMessage
 
 // ── Messages sent TO C# ───────────────────────────────────────────────────────
 
@@ -104,13 +113,18 @@ export interface RequestExportMessage {
   qualityScale: number
   watermarkEnabled: boolean
   watermarkText: string
+  watermarkImagePath: string
+}
+
+export interface RequestWatermarkImageMessage {
+  type: 'requestWatermarkImage'
 }
 
 export interface CancelExportMessage {
   type: 'cancelExport'
 }
 
-export type OutboundMessage = ReadyMessage | RequestExportMessage | CancelExportMessage
+export type OutboundMessage = ReadyMessage | RequestExportMessage | CancelExportMessage | RequestWatermarkImageMessage
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 
@@ -151,6 +165,9 @@ export interface EditorState {
   // Watermark
   watermarkEnabled: boolean
   watermarkText: string
+  watermarkImagePath: string
+  watermarkImageUrl: string
+  availableFormats: OutputFormat[]
   // Export state
   isExporting: boolean
   exportProgress: number
