@@ -70,7 +70,7 @@ internal sealed class ExportPayload
     public string OutputFormat { get; set; } = "MP4";
 
     [JsonProperty("fps")]
-    public double Fps { get; set; } = 30;
+    public double Fps { get; set; }
 
     /// <summary>Resolution scale: 1.0 = original, 0.5 = half, etc.</summary>
     [JsonProperty("qualityScale")]

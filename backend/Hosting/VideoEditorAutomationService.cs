@@ -173,6 +173,89 @@ public class VideoEditorAutomationService
         };
     }
 
+    /// <summary>
+    /// Exports a video through the same FFmpeg pipeline as the Photino UI:
+    /// trim, crop, format conversion, and text watermarking.
+    /// </summary>
+    public async Task<VideoEditorExportResult> ExportAsync(
+        VideoEditorExportRequest request,
+        Action<VideoExportProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        string inputPath = NormalizeExistingFilePath(request.InputPath, nameof(request.InputPath));
+        string outputFormat = string.IsNullOrWhiteSpace(request.OutputFormat) ? "MP4" : request.OutputFormat;
+        string outputPath = ResolveExportOutputPath(request.OutputPath, inputPath, outputFormat);
+
+        TimeSpan trimEnd = request.TrimEnd;
+        if (request.IsTrimActive)
+        {
+            if (request.TrimStart < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(request.TrimStart),
+                    "TrimStart must be zero or greater.");
+            }
+
+            if (trimEnd <= TimeSpan.Zero)
+            {
+                TimeSpan sourceDuration = await ProbeDurationAsync(inputPath, cancellationToken);
+                trimEnd = sourceDuration;
+            }
+
+            if (trimEnd <= request.TrimStart)
+            {
+                throw new InvalidOperationException(
+                    $"Trim range is invalid. Start={request.TrimStart.TotalSeconds:F2}s, End={trimEnd.TotalSeconds:F2}s.");
+            }
+        }
+
+        string watermarkText = request.WatermarkEnabled
+            ? (string.IsNullOrWhiteSpace(request.WatermarkText)
+                ? request.Watermark?.Text ?? string.Empty
+                : request.WatermarkText)
+            : string.Empty;
+
+        var exportOptions = new VideoExportOptions
+        {
+            InputPath = inputPath,
+            OutputPath = outputPath,
+            OutputFormat = outputFormat,
+            IsTrimActive = request.IsTrimActive,
+            TrimStart = request.TrimStart,
+            TrimEnd = trimEnd,
+            IsCropActive = request.IsCropActive,
+            CropX = request.CropX,
+            CropY = request.CropY,
+            CropWidth = request.CropWidth,
+            CropHeight = request.CropHeight,
+            OutputFps = request.OutputFps,
+            QualityScale = request.QualityScale,
+            Watermark = request.WatermarkEnabled ? request.Watermark : null,
+            WatermarkText = watermarkText
+        };
+
+        VideoEditorServices.ReportInformation(
+            nameof(VideoEditorAutomationService),
+            $"Headless export requested for '{inputPath}' -> '{outputPath}' ({outputFormat}).");
+
+        await _videoExportService.ExportAsync(exportOptions, onProgress, cancellationToken);
+
+        if (!File.Exists(outputPath))
+        {
+            throw new InvalidOperationException("Export completed but the output file was not created.");
+        }
+
+        return new VideoEditorExportResult
+        {
+            InputPath = inputPath,
+            OutputPath = outputPath,
+            FFmpegPath = _ffmpegPath,
+            OutputFormat = outputFormat
+        };
+    }
+
     private async Task<ExactVideoTrimPlan?> TryBuildExactVideoTrimPlanAsync(
         string inputPath,
         string outputPath,
@@ -566,6 +649,28 @@ public class VideoEditorAutomationService
         }
 
         return resolvedOutputPath;
+    }
+
+    private static string ResolveExportOutputPath(string? outputPath, string inputPath, string outputFormat)
+    {
+        if (!string.IsNullOrWhiteSpace(outputPath))
+        {
+            return ResolveOutputPath(outputPath, inputPath);
+        }
+
+        string extension = outputFormat.ToUpperInvariant() switch
+        {
+            "WEBM" => ".webm",
+            "GIF" => ".gif",
+            "WEBP" => ".webp",
+            _ => ".mp4"
+        };
+
+        return ResolveOutputPath(
+            Path.Combine(
+                Path.GetDirectoryName(inputPath) ?? ".",
+                $"{Path.GetFileNameWithoutExtension(inputPath)}_edited{extension}"),
+            inputPath);
     }
 
     private static void TryDelete(string path)

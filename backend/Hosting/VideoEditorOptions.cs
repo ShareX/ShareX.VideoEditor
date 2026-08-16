@@ -82,4 +82,16 @@ public class VideoEditorOptions
     /// previous process value when the editor exits.
     /// </summary>
     public bool EnableLinuxWaylandExplicitSyncMitigation { get; set; }
+
+    /// <summary>
+    /// Optional destination path for UI export. When set, the editor skips the
+    /// native save dialog and writes directly to this file.
+    /// </summary>
+    public string? OutputPath { get; set; }
+
+    /// <summary>
+    /// When true, the Photino window closes after a successful export.
+    /// Useful for scripted <see cref="VideoEditorHost.ShowEditorDialog"/> runs.
+    /// </summary>
+    public bool CloseAfterExport { get; set; }
 }
