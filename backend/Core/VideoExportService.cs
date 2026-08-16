@@ -60,8 +60,8 @@ public class VideoExportService
         Action<VideoExportProgress>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
-        string args = BuildArguments(options);
-        TimeSpan expectedDuration = options.TrimEnd > options.TrimStart
+        string args = FfmpegArgumentBuilder.Build(options);
+        TimeSpan expectedDuration = options.IsTrimActive && options.TrimEnd > options.TrimStart
             ? options.TrimEnd - options.TrimStart
             : TimeSpan.Zero;
 
@@ -147,105 +147,6 @@ public class VideoExportService
         }
 
         try { File.Delete(outputPath); } catch { }
-    }
-
-    // ── Argument builder ─────────────────────────────────────────────────────
-
-    private static string BuildArguments(VideoExportOptions opts)
-    {
-        var sb = new System.Text.StringBuilder();
-
-        // Input + trim
-        if (opts.IsTrimActive)
-        {
-            sb.Append($"-ss {opts.TrimStart:hh\\:mm\\:ss\\.ff} ");
-            sb.Append($"-i \"{opts.InputPath}\" ");
-            sb.Append($"-t {opts.TrimEnd - opts.TrimStart:hh\\:mm\\:ss\\.ff} ");
-        }
-        else
-        {
-            sb.Append($"-i \"{opts.InputPath}\" ");
-        }
-
-        // Video filters chain
-        var filters = new List<string>();
-
-        // Crop
-        if (opts.IsCropActive && opts.CropWidth > 0 && opts.CropHeight > 0)
-            filters.Add($"crop={opts.CropWidth}:{opts.CropHeight}:{opts.CropX}:{opts.CropY}");
-
-        // FPS
-        if (opts.OutputFps > 0)
-            filters.Add($"fps={opts.OutputFps.ToString(CultureInfo.InvariantCulture)}");
-
-        // Quality / scale (if not 100%)
-        if (Math.Abs(opts.QualityScale - 1.0) > 0.01)
-            filters.Add($"scale=iw*{opts.QualityScale.ToString(CultureInfo.InvariantCulture)}:ih*{opts.QualityScale.ToString(CultureInfo.InvariantCulture)}:flags=lanczos");
-
-        // Watermark
-        bool hasTextWatermark = !string.IsNullOrWhiteSpace(opts.WatermarkText);
-        bool hasWatermarkSettings = opts.Watermark != null && opts.Watermark.Enabled;
-
-        if (hasWatermarkSettings && !string.IsNullOrWhiteSpace(opts.WatermarkText))
-        {
-            double px = opts.Watermark!.PositionX;
-            double py = opts.Watermark!.PositionY;
-            int fontSize = opts.Watermark.FontSize;
-            string fontColor = opts.Watermark.FontColor.TrimStart('#');
-            string text = opts.WatermarkText.Replace(":", "\\:");
-            // drawtext filter
-            filters.Add($"drawtext=text='{text}'" +
-                        $":fontsize={fontSize}" +
-                        $":fontcolor=0x{fontColor}" +
-                        $":x=(w-text_w)*{px.ToString(CultureInfo.InvariantCulture)}" +
-                        $":y=(h-text_h)*{py.ToString(CultureInfo.InvariantCulture)}" +
-                        $":alpha={opts.Watermark.Opacity.ToString(CultureInfo.InvariantCulture)}");
-        }
-        else if (hasTextWatermark)
-        {
-            string text = opts.WatermarkText.Replace(":", "\\:");
-            filters.Add($"drawtext=text='{text}':fontsize=24:fontcolor=white:x=w-tw-10:y=h-th-10:alpha=0.8");
-        }
-
-        // GIF: apply palette filter after crop/fps/scale/watermark so one -vf is used
-        bool isGif = string.Equals(opts.OutputFormat, "GIF", StringComparison.OrdinalIgnoreCase);
-        if (isGif)
-            filters.Add("split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
-
-        if (filters.Count > 0)
-            sb.Append($"-vf \"{string.Join(",", filters)}\" ");
-
-        // Codec / format
-        AppendOutputCodec(sb, opts);
-
-        // Output
-        sb.Append($"-y \"{opts.OutputPath}\"");
-
-        return sb.ToString();
-    }
-
-    private static void AppendOutputCodec(System.Text.StringBuilder sb, VideoExportOptions opts)
-    {
-        switch (opts.OutputFormat.ToUpperInvariant())
-        {
-            case "WEBM":
-                sb.Append("-c:v libvpx-vp9 -crf 33 -b:v 0 -c:a libopus ");
-                break;
-
-            case "GIF":
-                // Palette filter is already merged into -vf in BuildArguments
-                sb.Append("-loop 0 -an ");
-                break;
-
-            case "WEBP":
-                sb.Append("-c:v libwebp_anim -loop 0 -lossless 0 -quality 80 -an ");
-                break;
-
-            case "MP4":
-            default:
-                sb.Append("-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart ");
-                break;
-        }
     }
 
     // ── Progress parsing ─────────────────────────────────────────────────────

@@ -49,8 +49,8 @@ public class VideoExportOptions
     public int CropWidth { get; set; }
     public int CropHeight { get; set; }
 
-    // Encoding
-    public double OutputFps { get; set; } = 30;
+    // Encoding. OutputFps <= 0 preserves the source frame rate.
+    public double OutputFps { get; set; }
     public double QualityScale { get; set; } = 1.0;
 
     // Watermark
