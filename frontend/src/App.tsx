@@ -154,8 +154,15 @@ export default function App() {
 
   const onVideoTimeUpdate = useCallback(() => {
     const vid = videoRef.current
-    if (vid) setState(s => ({ ...s, position: vid.currentTime }))
-  }, [])
+    if (!vid) return
+
+    if (state.isTrimActive && !vid.paused && vid.currentTime >= state.trimEnd) {
+      vid.pause()
+      vid.currentTime = state.trimEnd
+    }
+
+    setState(s => ({ ...s, position: vid.currentTime }))
+  }, [state.isTrimActive, state.trimEnd])
 
   const syncPlaybackState = useCallback(() => {
     const vid = videoRef.current
@@ -183,6 +190,13 @@ export default function App() {
     const vid = videoRef.current
     if (!vid) return
     if (vid.paused) {
+      const rangeStart = state.isTrimActive ? state.trimStart : 0
+      const rangeEnd = state.isTrimActive ? state.trimEnd : state.duration
+      if (vid.currentTime < rangeStart || vid.currentTime >= rangeEnd - 0.01) {
+        vid.currentTime = rangeStart
+        setState(s => ({ ...s, position: rangeStart }))
+      }
+
       vid.play().catch(err => {
         console.error('Play failed:', err)
         setState(s => ({ ...s, isPlaying: false }))
@@ -190,23 +204,35 @@ export default function App() {
     } else {
       vid.pause()
     }
-  }, [])
+  }, [state.duration, state.isTrimActive, state.trimEnd, state.trimStart])
+
+  const skipBy = useCallback((seconds: number) => {
+    const vid = videoRef.current
+    if (!vid) return
+
+    const rangeStart = state.isTrimActive ? state.trimStart : 0
+    const rangeEnd = state.isTrimActive ? state.trimEnd : state.duration
+    const next = Math.max(rangeStart, Math.min(rangeEnd, vid.currentTime + seconds))
+    vid.currentTime = next
+    setState(s => ({ ...s, position: next }))
+  }, [state.duration, state.isTrimActive, state.trimEnd, state.trimStart])
 
   const skipBack = useCallback(() => {
-    const vid = videoRef.current
-    if (vid) vid.currentTime = Math.max(0, vid.currentTime - 5)
-  }, [])
+    skipBy(-5)
+  }, [skipBy])
 
   const skipForward = useCallback(() => {
-    const vid = videoRef.current
-    if (vid) vid.currentTime = Math.min(state.duration, vid.currentTime + 5)
-  }, [state.duration])
+    skipBy(5)
+  }, [skipBy])
 
   const seekTo = useCallback((seconds: number) => {
+    const rangeStart = state.isTrimActive ? state.trimStart : 0
+    const rangeEnd = state.isTrimActive ? state.trimEnd : state.duration
+    const next = Math.max(rangeStart, Math.min(rangeEnd, seconds))
     const vid = videoRef.current
-    if (vid) vid.currentTime = seconds
-    setState(s => ({ ...s, position: seconds }))
-  }, [])
+    if (vid) vid.currentTime = next
+    setState(s => ({ ...s, position: next }))
+  }, [state.duration, state.isTrimActive, state.trimEnd, state.trimStart])
 
   const setVolume = useCallback((v: number) => {
     const vid = videoRef.current
@@ -215,29 +241,21 @@ export default function App() {
   }, [])
 
   const setTrimStart = useCallback((value: number) => {
-    setState(s => {
-      const trimEnd = s.trimEnd > 0 ? s.trimEnd : s.duration
-      const maxStart = Math.max(0, trimEnd - MIN_TRIM_SECONDS)
-
-      return {
-        ...s,
-        trimStart: Math.max(0, Math.min(value, maxStart)),
-        isTrimActive: true,
-      }
-    })
-  }, [])
+    const trimEnd = state.trimEnd > 0 ? state.trimEnd : state.duration
+    const maxStart = Math.max(0, trimEnd - MIN_TRIM_SECONDS)
+    const next = Math.max(0, Math.min(value, maxStart))
+    const vid = videoRef.current
+    if (vid) vid.currentTime = next
+    setState(s => ({ ...s, trimStart: next, position: next, isTrimActive: true }))
+  }, [state.duration, state.trimEnd])
 
   const setTrimEnd = useCallback((value: number) => {
-    setState(s => {
-      const minEnd = Math.min(s.duration, s.trimStart + MIN_TRIM_SECONDS)
-
-      return {
-        ...s,
-        trimEnd: Math.max(minEnd, Math.min(value, s.duration)),
-        isTrimActive: true,
-      }
-    })
-  }, [])
+    const minEnd = Math.min(state.duration, state.trimStart + MIN_TRIM_SECONDS)
+    const next = Math.max(minEnd, Math.min(value, state.duration))
+    const vid = videoRef.current
+    if (vid) vid.currentTime = next
+    setState(s => ({ ...s, trimEnd: next, position: next, isTrimActive: true }))
+  }, [state.duration, state.trimStart])
 
   // ── Export ──────────────────────────────────────────────────────────────────
 
@@ -246,7 +264,7 @@ export default function App() {
       return
     }
 
-    send({
+    const delivered = send({
       type: 'requestExport',
       isTrimActive: state.isTrimActive,
       trimStart: state.trimStart,
@@ -263,7 +281,12 @@ export default function App() {
       watermarkText: state.watermarkText,
       watermarkImagePath: state.watermarkImagePath,
     })
-    setState(s => ({ ...s, isExporting: true, exportProgress: 0, exportStatusMessage: 'Preparing…' }))
+    setState(s => ({
+      ...s,
+      isExporting: delivered,
+      exportProgress: 0,
+      exportStatusMessage: delivered ? 'Preparing…' : 'Could not contact the editor host. Please retry.',
+    }))
   }, [send, state])
 
   const cancelExport = useCallback(() => {
@@ -285,18 +308,20 @@ export default function App() {
         return
       }
 
-      switch (e.key) {
+      const key = e.key.toLowerCase()
+      switch (key) {
         case ' ':        e.preventDefault(); togglePlayPause(); break
-        case 'ArrowLeft': e.preventDefault(); skipBack(); break
-        case 'ArrowRight': e.preventDefault(); skipForward(); break
+        case 'arrowleft': e.preventDefault(); skipBy(e.altKey ? -0.2 : e.shiftKey ? -5 : -1); break
+        case 'arrowright': e.preventDefault(); skipBy(e.altKey ? 0.2 : e.shiftKey ? 5 : 1); break
         case 'i': setTrimStart(state.position); break
         case 'o': setTrimEnd(state.position); break
-        case 'e': if (e.ctrlKey) { e.preventDefault(); if (canExport) requestExport() } break
+        case 'e':
+        case 's': if (e.ctrlKey) { e.preventDefault(); if (canExport) requestExport() } break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [canExport, requestExport, setTrimEnd, setTrimStart, skipBack, skipForward, state.position, togglePlayPause])
+  }, [canExport, requestExport, setTrimEnd, setTrimStart, skipBy, state.position, togglePlayPause])
 
   return (
     <div className="relative flex flex-col w-full h-full bg-ve-base select-none overflow-hidden">
@@ -368,6 +393,15 @@ export default function App() {
         <ToolPanel
           state={state}
           onStateChange={patch => setState(s => ({ ...s, ...patch }))}
+          onResetCrop={() => setState(s => ({
+            ...s,
+            isCropActive: false,
+            isCropMode: false,
+            cropX: 0,
+            cropY: 0,
+            cropWidth: 0,
+            cropHeight: 0,
+          }))}
           onExport={requestExport}
           onPickWatermarkImage={() => send({ type: 'requestWatermarkImage' })}
         />

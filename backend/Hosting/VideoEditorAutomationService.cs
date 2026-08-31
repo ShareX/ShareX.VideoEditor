@@ -93,6 +93,7 @@ public class VideoEditorAutomationService
 
         string inputPath = NormalizeExistingFilePath(request.InputPath, nameof(request.InputPath));
         string outputPath = ResolveOutputPath(request.OutputPath, inputPath);
+        EnsureDistinctInputAndOutput(inputPath, outputPath);
 
         if (request.TrimStart < TimeSpan.Zero)
         {
@@ -187,6 +188,7 @@ public class VideoEditorAutomationService
         string inputPath = NormalizeExistingFilePath(request.InputPath, nameof(request.InputPath));
         string outputFormat = string.IsNullOrWhiteSpace(request.OutputFormat) ? "MP4" : request.OutputFormat;
         string outputPath = ResolveExportOutputPath(request.OutputPath, inputPath, outputFormat);
+        EnsureDistinctInputAndOutput(inputPath, outputPath);
 
         TimeSpan trimEnd = request.TrimEnd;
         if (request.IsTrimActive)
@@ -320,29 +322,18 @@ public class VideoEditorAutomationService
         Action<VideoExportProgress>? onProgress,
         CancellationToken cancellationToken)
     {
-        string arguments = BuildExactTrimArguments(inputPath, outputPath, request.TrimStart, trimEnd, plan);
-
         VideoEditorServices.ReportInformation(
             nameof(VideoEditorAutomationService),
             $"Using exact video-only trim path. Boundary={plan.BoundaryFrameTimestampSeconds:F6}s, " +
             $"RangeStart={(plan.RangeStartTimestampSeconds?.ToString("F6", CultureInfo.InvariantCulture) ?? "n/a")}s.");
 
-        try
-        {
-            await _videoExportService.ExportWithCustomArgumentsAsync(
-                arguments,
-                outputPath,
-                trimEnd - request.TrimStart,
-                onProgress,
-                cancellationToken);
-
-            Mp4DurationPatcher.PatchExactDuration(outputPath, trimEnd - request.TrimStart);
-        }
-        catch
-        {
-            TryDelete(outputPath);
-            throw;
-        }
+        await _videoExportService.ExportWithCustomArgumentsAsync(
+            stagingPath => BuildExactTrimArguments(inputPath, stagingPath, request.TrimStart, trimEnd, plan),
+            outputPath,
+            trimEnd - request.TrimStart,
+            stagingPath => Mp4DurationPatcher.PatchExactDuration(stagingPath, trimEnd - request.TrimStart),
+            onProgress,
+            cancellationToken);
 
         return new VideoEditorTrimResult
         {
@@ -645,6 +636,18 @@ public class VideoEditorAutomationService
         return normalizedPath;
     }
 
+    private static void EnsureDistinctInputAndOutput(string inputPath, string outputPath)
+    {
+        StringComparison comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (string.Equals(Path.GetFullPath(inputPath), Path.GetFullPath(outputPath), comparison))
+        {
+            throw new InvalidOperationException("The export destination must be different from the source video.");
+        }
+    }
+
     private static string ResolveOutputPath(string? outputPath, string inputPath)
     {
         string resolvedOutputPath = !string.IsNullOrWhiteSpace(outputPath)
@@ -682,20 +685,6 @@ public class VideoEditorAutomationService
                 Path.GetDirectoryName(inputPath) ?? ".",
                 $"{Path.GetFileNameWithoutExtension(inputPath)}_edited{extension}"),
             inputPath);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-        }
     }
 
     private static void TryKill(Process process)

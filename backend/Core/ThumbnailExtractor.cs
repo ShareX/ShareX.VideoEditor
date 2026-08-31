@@ -53,23 +53,42 @@ public class ThumbnailExtractor
         int thumbHeight = 54,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(videoPath, nameof(videoPath));
+        if (!File.Exists(videoPath))
+        {
+            throw new FileNotFoundException("The source video was not found.", videoPath);
+        }
+
+        count = Math.Clamp(count, 1, 120);
+        thumbWidth = Math.Clamp(thumbWidth, 16, 1920);
+        thumbHeight = Math.Clamp(thumbHeight, 16, 1080);
+
         var results = new List<string>();
         var tempDir = Path.Combine(Path.GetTempPath(), "ShareX_VideoEditor_Thumbs_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            double fps = (double)count / await GetDurationSecondsAsync(videoPath, cancellationToken);
-            if (double.IsNaN(fps) || fps <= 0) fps = 1;
+            double durationSeconds = await GetDurationSecondsAsync(videoPath, cancellationToken);
+            double fps = durationSeconds > 0 ? count / durationSeconds : 1;
+            if (!double.IsFinite(fps) || fps <= 0) fps = 1;
 
             string outputPattern = Path.Combine(tempDir, "thumb_%04d.jpg");
-            string args = $"-i \"{videoPath}\" " +
-                          $"-vf \"fps={fps:F4},scale={thumbWidth}:{thumbHeight}:force_original_aspect_ratio=decrease,pad={thumbWidth}:{thumbHeight}:(ow-iw)/2:(oh-ih)/2\" " +
-                          $"-frames:v {count} " +
-                          $"-q:v 4 " +
-                          $"\"{outputPattern}\" -y";
+            string filter = $"fps={fps.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}," +
+                            $"scale={thumbWidth}:{thumbHeight}:force_original_aspect_ratio=decrease," +
+                            $"pad={thumbWidth}:{thumbHeight}:(ow-iw)/2:(oh-ih)/2";
 
-            bool success = await RunFFmpegAsync(args, cancellationToken);
+            bool success = await RunFFmpegAsync(
+                [
+                    "-hide_banner", "-loglevel", "error",
+                    "-i", videoPath,
+                    "-vf", filter,
+                    "-frames:v", count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "-q:v", "4",
+                    outputPattern,
+                    "-y"
+                ],
+                cancellationToken);
             if (!success) return results;
 
             foreach (var file in Directory.GetFiles(tempDir, "thumb_*.jpg").OrderBy(f => f))
@@ -101,26 +120,14 @@ public class ThumbnailExtractor
 
     private async Task<double> GetDurationSecondsAsync(string videoPath, CancellationToken cancellationToken)
     {
-        string args = $"-i \"{videoPath}\"";
-        var output = new System.Text.StringBuilder();
-
-        var psi = new ProcessStartInfo(_ffmpegPath, args)
-        {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var psi = CreateStartInfo(["-hide_banner", "-i", videoPath]);
 
         using var process = Process.Start(psi);
         if (process == null) return 60;
 
-        string? line;
-        while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
-            output.AppendLine(line);
+        string output = await WaitForExitAndReadStderrAsync(process, cancellationToken);
 
-        await process.WaitForExitAsync(cancellationToken);
-
-        var durationLine = output.ToString()
+        var durationLine = output
             .Split('\n')
             .FirstOrDefault(l => l.TrimStart().StartsWith("Duration:", StringComparison.OrdinalIgnoreCase));
 
@@ -140,19 +147,66 @@ public class ThumbnailExtractor
         return 60;
     }
 
-    private async Task<bool> RunFFmpegAsync(string args, CancellationToken cancellationToken)
+    private async Task<bool> RunFFmpegAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
-        var psi = new ProcessStartInfo(_ffmpegPath, args)
+        var psi = CreateStartInfo(arguments);
+
+        using var process = Process.Start(psi);
+        if (process == null) return false;
+
+        _ = await WaitForExitAndReadStderrAsync(process, cancellationToken);
+        return process.ExitCode == 0;
+    }
+
+    private ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments)
+    {
+        var startInfo = new ProcessStartInfo(_ffmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(psi);
-        if (process == null) return false;
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
-        await process.WaitForExitAsync(cancellationToken);
-        return process.ExitCode == 0;
+        return startInfo;
+    }
+
+    private static async Task<string> WaitForExitAndReadStderrAsync(
+        Process process,
+        CancellationToken cancellationToken)
+    {
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+        using CancellationTokenRegistration registration = cancellationToken.Register(() => TryKill(process));
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+            return await stderrTask;
+        }
+        catch
+        {
+            TryKill(process);
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
+            try { _ = await stderrTask.WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
+            throw;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
     }
 }

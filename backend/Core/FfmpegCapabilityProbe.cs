@@ -133,9 +133,19 @@ public static class FfmpegCapabilityProbe
                 return new FfmpegCapabilitySnapshot();
             }
 
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit(8000);
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(8000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                try { process.WaitForExit(2000); } catch { }
+                return new FfmpegCapabilitySnapshot();
+            }
+
+            Task.WaitAll([stdoutTask, stderrTask], TimeSpan.FromSeconds(2));
+            string stdout = stdoutTask.IsCompletedSuccessfully ? stdoutTask.Result : string.Empty;
+            string stderr = stderrTask.IsCompletedSuccessfully ? stderrTask.Result : string.Empty;
             return ParseEncoderList(stdout + Environment.NewLine + stderr);
         }
         catch

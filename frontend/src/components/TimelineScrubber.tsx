@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { formatTime } from '../utils/time'
+import { formatPreciseTime } from '../utils/time'
 import { PremiumButton } from './ui'
 
 interface TimelineScrubberProps {
@@ -60,7 +60,7 @@ export default function TimelineScrubber({
     else target = 'playhead'
 
     dragRef.current = target
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    e.currentTarget.setPointerCapture(e.pointerId)
     applyDrag(target, e.clientX)
     e.preventDefault()
   }, [duration, trimStart, trimEnd]) // eslint-disable-line
@@ -81,6 +81,16 @@ export default function TimelineScrubber({
     if (dragRef.current) applyDrag(dragRef.current, e.clientX)
     dragRef.current = null
   }, [applyDrag])
+
+  const handleTrimKeyDown = useCallback((target: 'trimStart' | 'trimEnd', e: React.KeyboardEvent) => {
+    if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return
+    const direction = e.key === 'ArrowLeft' ? -1 : 1
+    const step = e.altKey ? 0.2 : e.shiftKey ? 5 : 0.1
+    if (target === 'trimStart') onTrimStartChange(trimStart + direction * step)
+    else onTrimEndChange(trimEnd + direction * step)
+    e.preventDefault()
+    e.stopPropagation()
+  }, [onTrimEndChange, onTrimStartChange, trimEnd, trimStart])
 
   const frac = (s: number) => duration > 0 ? `${(s / duration) * 100}%` : '0%'
 
@@ -122,17 +132,33 @@ export default function TimelineScrubber({
 
         {/* Trim start handle */}
         {isTrimActive && (
-          <div
-            className="absolute top-0 bottom-0 w-1.5 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm"
+          <button
+            type="button"
+            role="slider"
+            aria-label="Trim start"
+            aria-valuemin={0}
+            aria-valuemax={effectiveTrimEnd}
+            aria-valuenow={effectiveTrimStart}
+            aria-valuetext={formatPreciseTime(effectiveTrimStart)}
+            className="absolute top-0 bottom-0 w-3 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm focus:outline-2 focus:outline-white"
             style={{ left: frac(effectiveTrimStart), transform: 'translateX(-50%)' }}
+            onKeyDown={e => handleTrimKeyDown('trimStart', e)}
           />
         )}
 
         {/* Trim end handle */}
         {isTrimActive && (
-          <div
-            className="absolute top-0 bottom-0 w-1.5 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm"
+          <button
+            type="button"
+            role="slider"
+            aria-label="Trim end"
+            aria-valuemin={effectiveTrimStart}
+            aria-valuemax={duration}
+            aria-valuenow={effectiveTrimEnd}
+            aria-valuetext={formatPreciseTime(effectiveTrimEnd)}
+            className="absolute top-0 bottom-0 w-3 bg-amber-400 rounded-full cursor-ew-resize shadow-glow-amber-sm focus:outline-2 focus:outline-white"
             style={{ left: frac(effectiveTrimEnd), transform: 'translateX(-50%)' }}
+            onKeyDown={e => handleTrimKeyDown('trimEnd', e)}
           />
         )}
 
@@ -151,13 +177,13 @@ export default function TimelineScrubber({
           {isTrimActive && (
             <>
               <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
-                IN <span className="text-amber-400">{formatTime(effectiveTrimStart)}</span>
+                IN <span className="text-amber-400">{formatPreciseTime(effectiveTrimStart)}</span>
               </span>
               <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
-                OUT <span className="text-amber-400">{formatTime(effectiveTrimEnd)}</span>
+                OUT <span className="text-amber-400">{formatPreciseTime(effectiveTrimEnd)}</span>
               </span>
               <span className="text-[11px] text-ve-muted font-mono tracking-tighter">
-                DUR <span className="text-ve-secondary">{formatTime(effectiveTrimEnd - effectiveTrimStart)}</span>
+                DUR <span className="text-ve-secondary">{formatPreciseTime(effectiveTrimEnd - effectiveTrimStart)}</span>
               </span>
             </>
           )}

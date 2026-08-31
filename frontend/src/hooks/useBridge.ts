@@ -20,12 +20,15 @@ export function useSend() {
     try {
       if (win.external?.sendMessage) {
         win.external.sendMessage(JSON.stringify(msg))
+        return true
       } else {
         console.warn('[Bridge] sendMessage not available — running outside Photino?', msg)
       }
     } catch {
       console.warn('[Bridge] sendMessage failed', msg)
     }
+
+    return false
   }, [])
 }
 

@@ -3,6 +3,7 @@ import {
   Move, RotateCcw, Download,
 } from 'lucide-react'
 import type { ActivePanel, EditorState, OutputFormat } from '../types/bridge'
+import { formatPreciseTime } from '../utils/time'
 import {
   PremiumButton, PremiumInput, PremiumSelect,
   PremiumSlider, PremiumToggle, SectionLabel, FieldRow,
@@ -13,6 +14,7 @@ const OUTPUT_FORMATS: OutputFormat[] = ['MP4', 'WebM', 'GIF', 'WebP']
 interface ToolPanelProps {
   state: EditorState
   onStateChange: (patch: Partial<EditorState>) => void
+  onResetCrop: () => void
   onExport: () => void
   onPickWatermarkImage: () => void
 }
@@ -24,7 +26,7 @@ const TABS: { id: ActivePanel; label: string; icon: typeof Scissors }[] = [
   { id: 'export', label: 'Export', icon: Settings },
 ]
 
-export default function ToolPanel({ state, onStateChange, onExport, onPickWatermarkImage }: ToolPanelProps) {
+export default function ToolPanel({ state, onStateChange, onResetCrop, onExport, onPickWatermarkImage }: ToolPanelProps) {
   return (
     <aside className="flex flex-col w-72 shrink-0 bg-ve-surface/60 backdrop-blur-md border-l border-white/6">
       {/* Segmented tab bar */}
@@ -58,7 +60,9 @@ export default function ToolPanel({ state, onStateChange, onExport, onPickWaterm
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-5">
         <div className="animate-slide-up">
           {state.activePanel === 'trim' && <TrimPanel state={state} />}
-          {state.activePanel === 'crop' && <CropPanel state={state} onChange={onStateChange} />}
+          {state.activePanel === 'crop' && (
+            <CropPanel state={state} onChange={onStateChange} onReset={onResetCrop} />
+          )}
           {state.activePanel === 'watermark' && (
             <WatermarkPanel state={state} onChange={onStateChange} onPickImage={onPickWatermarkImage} />
           )}
@@ -86,11 +90,6 @@ export default function ToolPanel({ state, onStateChange, onExport, onPickWaterm
 // ── Sub-panels ────────────────────────────────────────────────────────────────
 
 function TrimPanel({ state }: { state: EditorState }) {
-  const fmt = (s: number) => {
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${m}:${String(sec).padStart(2, '0')}`
-  }
   const dur = state.isTrimActive ? state.trimEnd - state.trimStart : state.duration
 
   return (
@@ -98,10 +97,10 @@ function TrimPanel({ state }: { state: EditorState }) {
       <SectionLabel>Trim</SectionLabel>
       {state.isTrimActive ? (
         <div className="space-y-2.5 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6">
-          <FieldRow label="In">{fmt(state.trimStart)}</FieldRow>
-          <FieldRow label="Out">{fmt(state.trimEnd)}</FieldRow>
+          <FieldRow label="In">{formatPreciseTime(state.trimStart)}</FieldRow>
+          <FieldRow label="Out">{formatPreciseTime(state.trimEnd)}</FieldRow>
           <div className="h-px bg-white/6" />
-          <FieldRow label="Duration">{fmt(dur)}</FieldRow>
+          <FieldRow label="Duration">{formatPreciseTime(dur)}</FieldRow>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
@@ -115,7 +114,15 @@ function TrimPanel({ state }: { state: EditorState }) {
   )
 }
 
-function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Partial<EditorState>) => void }) {
+function CropPanel({
+  state,
+  onChange,
+  onReset,
+}: {
+  state: EditorState
+  onChange: (p: Partial<EditorState>) => void
+  onReset: () => void
+}) {
   return (
     <>
       <SectionLabel>Crop</SectionLabel>
@@ -129,15 +136,28 @@ function CropPanel({ state, onChange }: { state: EditorState; onChange: (p: Part
         {state.isCropMode ? 'Exit Crop Mode' : 'Enter Crop Mode'}
       </PremiumButton>
       <p className="text-xs text-ve-muted leading-relaxed mt-2">
-        Enter crop mode and drag the crop region on the video preview.
+        {state.isCropActive
+          ? 'Crop is applied to export. Enter crop mode to adjust it, or reset to export the full frame.'
+          : 'Enter crop mode and drag the crop region on the video preview.'}
       </p>
       {state.isCropActive && (
-        <div className="space-y-2 mt-3 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6">
-          <FieldRow label="X">{state.cropX}px</FieldRow>
-          <FieldRow label="Y">{state.cropY}px</FieldRow>
-          <FieldRow label="W">{state.cropWidth}px</FieldRow>
-          <FieldRow label="H">{state.cropHeight}px</FieldRow>
-        </div>
+        <>
+          <div className="space-y-2 mt-3 p-3 rounded-2xl bg-ve-elevated/40 ring-1 ring-white/6">
+            <FieldRow label="X">{state.cropX}px</FieldRow>
+            <FieldRow label="Y">{state.cropY}px</FieldRow>
+            <FieldRow label="W">{state.cropWidth}px</FieldRow>
+            <FieldRow label="H">{state.cropHeight}px</FieldRow>
+          </div>
+          <PremiumButton
+            onClick={onReset}
+            variant="ghost"
+            size="md"
+            className="w-full mt-3"
+            icon={<RotateCcw className="w-3.5 h-3.5" />}
+          >
+            Reset Crop
+          </PremiumButton>
+        </>
       )}
     </>
   )
@@ -244,4 +264,3 @@ function ExportSettingsPanel({ state, onChange }: { state: EditorState; onChange
     </>
   )
 }
-

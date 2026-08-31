@@ -34,7 +34,7 @@ namespace ShareX.VideoEditor.Core;
 /// </summary>
 public static class FfmpegArgumentBuilder
 {
-    public static string Build(VideoExportOptions opts)
+    public static string Build(VideoExportOptions opts, string? outputPath = null)
     {
         ArgumentNullException.ThrowIfNull(opts);
 
@@ -77,7 +77,7 @@ public static class FfmpegArgumentBuilder
         }
 
         AppendOutputCodec(sb, opts);
-        sb.Append("-y ").Append(Quote(opts.OutputPath));
+        sb.Append("-y ").Append(Quote(outputPath ?? opts.OutputPath));
         return sb.ToString();
     }
 
@@ -360,7 +360,7 @@ public static class FfmpegArgumentBuilder
             value = TimeSpan.Zero;
         }
 
-        return value.ToString(@"hh\:mm\:ss\.ff", CultureInfo.InvariantCulture);
+        return value.TotalSeconds.ToString("0.######", CultureInfo.InvariantCulture);
     }
 
     private static string Quote(string value) => $"\"{value}\"";
