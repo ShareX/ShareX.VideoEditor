@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { formatPreciseTime } from '../utils/time'
 import { PremiumButton } from './ui'
+import { timelineFractionToTime, timeToTimelinePercent } from '../utils/timeline'
 
 interface TimelineScrubberProps {
   duration: number
@@ -8,13 +9,18 @@ interface TimelineScrubberProps {
   trimStart: number
   trimEnd: number
   isTrimActive: boolean
-  thumbnails: string[]
+  thumbnails: Array<string | null>
+  viewStart: number
+  viewEnd: number
+  isSelectionZoomed: boolean
   onSeek: (seconds: number) => void
   onTrimStartChange: (seconds: number) => void
   onTrimEndChange: (seconds: number) => void
   onSetTrimStart: () => void
   onSetTrimEnd: () => void
   onResetTrim: () => void
+  onZoomToSelection: () => void
+  onResetZoom: () => void
 }
 
 type DragTarget = 'playhead' | 'trimStart' | 'trimEnd'
@@ -26,22 +32,27 @@ export default function TimelineScrubber({
   trimEnd,
   isTrimActive,
   thumbnails,
+  viewStart,
+  viewEnd,
+  isSelectionZoomed,
   onSeek,
   onTrimStartChange,
   onTrimEndChange,
   onSetTrimStart,
   onSetTrimEnd,
   onResetTrim,
+  onZoomToSelection,
+  onResetZoom,
 }: TimelineScrubberProps) {
   const trackRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragTarget | null>(null)
 
   const xToSeconds = useCallback((clientX: number): number => {
     const rect = trackRef.current?.getBoundingClientRect()
-    if (!rect || duration === 0) return 0
+    if (!rect || rect.width <= 0 || duration === 0) return 0
     const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    return frac * duration
-  }, [duration])
+    return timelineFractionToTime(frac, { start: viewStart, end: viewEnd })
+  }, [duration, viewEnd, viewStart])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (duration === 0) return
@@ -50,8 +61,8 @@ export default function TimelineScrubber({
     const x = e.clientX - rect.left
     const w = rect.width
 
-    const startX = (trimStart / duration) * w
-    const endX = (trimEnd / duration) * w
+    const startX = (timeToTimelinePercent(trimStart, { start: viewStart, end: viewEnd }) / 100) * w
+    const endX = (timeToTimelinePercent(trimEnd, { start: viewStart, end: viewEnd }) / 100) * w
     const HIT = 10
 
     let target: DragTarget
@@ -60,10 +71,10 @@ export default function TimelineScrubber({
     else target = 'playhead'
 
     dragRef.current = target
-    e.currentTarget.setPointerCapture(e.pointerId)
+    e.currentTarget.setPointerCapture?.(e.pointerId)
     applyDrag(target, e.clientX)
     e.preventDefault()
-  }, [duration, trimStart, trimEnd]) // eslint-disable-line
+  }, [duration, trimStart, trimEnd, viewEnd, viewStart]) // eslint-disable-line
 
   const applyDrag = useCallback((target: DragTarget, clientX: number) => {
     const t = xToSeconds(clientX)
@@ -92,7 +103,9 @@ export default function TimelineScrubber({
     e.stopPropagation()
   }, [onTrimEndChange, onTrimStartChange, trimEnd, trimStart])
 
-  const frac = (s: number) => duration > 0 ? `${(s / duration) * 100}%` : '0%'
+  const frac = (s: number) => duration > 0
+    ? `${timeToTimelinePercent(s, { start: viewStart, end: viewEnd })}%`
+    : '0%'
 
   const effectiveTrimStart = isTrimActive ? trimStart : 0
   const effectiveTrimEnd = isTrimActive ? trimEnd : duration
@@ -102,6 +115,7 @@ export default function TimelineScrubber({
       {/* Track container */}
       <div
         ref={trackRef}
+        aria-label="Video timeline"
         className="relative h-14 rounded-2xl overflow-hidden cursor-pointer bg-ve-base ring-1 ring-white/6 shadow-inner-highlight"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -110,15 +124,17 @@ export default function TimelineScrubber({
         {/* Thumbnails */}
         {thumbnails.length > 0 && (
           <div className="absolute inset-0 flex">
-            {thumbnails.map((src, i) => (
-              <img
-                key={i}
-                src={src}
-                className="h-full object-cover flex-1"
-                draggable={false}
-                alt=""
-              />
-            ))}
+            {thumbnails.map((src, i) => src ? (
+                <img
+                  key={i}
+                  src={src}
+                  className="h-full min-w-0 object-cover flex-1"
+                  draggable={false}
+                  alt=""
+                />
+              ) : (
+                <div key={i} className="h-full min-w-0 flex-1 bg-ve-elevated animate-pulse" aria-hidden="true" />
+              ))}
           </div>
         )}
 
@@ -189,6 +205,28 @@ export default function TimelineScrubber({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          {isTrimActive && !isSelectionZoomed && (
+            <PremiumButton
+              onClick={onZoomToSelection}
+              variant="ghost"
+              size="sm"
+              className="h-7! px-2.5! text-[11px]!"
+              title="Zoom the timeline to the selected trim range"
+            >
+              Zoom to selection
+            </PremiumButton>
+          )}
+          {isSelectionZoomed && (
+            <PremiumButton
+              onClick={onResetZoom}
+              variant="ghost"
+              size="sm"
+              className="h-7! px-2.5! text-[11px]!"
+              title="Show the complete timeline"
+            >
+              Show full timeline
+            </PremiumButton>
+          )}
           <PremiumButton
             onClick={onSetTrimStart}
             variant="ghost"

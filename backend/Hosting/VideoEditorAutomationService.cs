@@ -23,7 +23,6 @@
 
 #endregion License Information (GPL v3)
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using ShareX.VideoEditor.Core;
@@ -353,57 +352,28 @@ public class VideoEditorAutomationService
     {
         if (!string.IsNullOrWhiteSpace(_ffprobePath) && File.Exists(_ffprobePath))
         {
-            var probeStartInfo = new ProcessStartInfo(
+            FfmpegProcessResult probeResult = await FfmpegProcessRunner.RunAsync(
                 _ffprobePath,
-                $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{inputPath}\"")
+                ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", inputPath],
+                cancellationToken: cancellationToken);
+
+            if (probeResult.ExitCode == 0 && double.TryParse(
+                probeResult.StandardOutput.Trim(),
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out double durationSeconds) &&
+                durationSeconds > 0)
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using Process? probeProcess = Process.Start(probeStartInfo);
-            if (probeProcess != null)
-            {
-                using CancellationTokenRegistration probeRegistration =
-                    cancellationToken.Register(() => TryKill(probeProcess));
-
-                string rawDuration = await probeProcess.StandardOutput.ReadToEndAsync(cancellationToken);
-                await probeProcess.WaitForExitAsync(cancellationToken);
-
-                if (double.TryParse(
-                    rawDuration.Trim(),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out double durationSeconds) &&
-                    durationSeconds > 0)
-                {
-                    return durationSeconds;
-                }
+                return durationSeconds;
             }
         }
 
-        var ffmpegStartInfo = new ProcessStartInfo(_ffmpegPath, $"-i \"{inputPath}\"")
-        {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        FfmpegProcessResult ffmpegResult = await FfmpegProcessRunner.RunAsync(
+            _ffmpegPath,
+            ["-hide_banner", "-i", inputPath],
+            cancellationToken: cancellationToken);
 
-        using Process? ffmpegProcess = Process.Start(ffmpegStartInfo);
-        if (ffmpegProcess == null)
-        {
-            return 0;
-        }
-
-        using CancellationTokenRegistration ffmpegRegistration =
-            cancellationToken.Register(() => TryKill(ffmpegProcess));
-
-        string stderr = await ffmpegProcess.StandardError.ReadToEndAsync(cancellationToken);
-        await ffmpegProcess.WaitForExitAsync(cancellationToken);
-
-        Match durationMatch = DurationRegex.Match(stderr);
+        Match durationMatch = DurationRegex.Match(ffmpegResult.StandardError);
         if (!durationMatch.Success)
         {
             return 0;
@@ -420,29 +390,17 @@ public class VideoEditorAutomationService
         string inputPath,
         CancellationToken cancellationToken)
     {
-        var probeStartInfo = new ProcessStartInfo(
+        FfmpegProcessResult probeResult = await FfmpegProcessRunner.RunAsync(
             _ffprobePath,
-            $"-v error -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 \"{inputPath}\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            ["-v", "error", "-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1:nokey=1", inputPath],
+            cancellationToken: cancellationToken);
 
-        using Process? probeProcess = Process.Start(probeStartInfo);
-        if (probeProcess == null)
+        if (probeResult.ExitCode != 0)
         {
             return [];
         }
 
-        using CancellationTokenRegistration probeRegistration =
-            cancellationToken.Register(() => TryKill(probeProcess));
-
-        string rawOutput = await probeProcess.StandardOutput.ReadToEndAsync(cancellationToken);
-        await probeProcess.WaitForExitAsync(cancellationToken);
-
-        return rawOutput
+        return probeResult.StandardOutput
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(static x => !string.IsNullOrWhiteSpace(x))
             .ToArray();
@@ -452,29 +410,17 @@ public class VideoEditorAutomationService
         string inputPath,
         CancellationToken cancellationToken)
     {
-        var probeStartInfo = new ProcessStartInfo(
+        FfmpegProcessResult probeResult = await FfmpegProcessRunner.RunAsync(
             _ffprobePath,
-            $"-v error -select_streams v:0 -show_entries frame=best_effort_timestamp_time -of csv=p=0 \"{inputPath}\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            ["-v", "error", "-select_streams", "v:0", "-show_entries", "frame=best_effort_timestamp_time", "-of", "csv=p=0", inputPath],
+            cancellationToken: cancellationToken);
 
-        using Process? probeProcess = Process.Start(probeStartInfo);
-        if (probeProcess == null)
+        if (probeResult.ExitCode != 0)
         {
             return [];
         }
 
-        using CancellationTokenRegistration probeRegistration =
-            cancellationToken.Register(() => TryKill(probeProcess));
-
-        string rawOutput = await probeProcess.StandardOutput.ReadToEndAsync(cancellationToken);
-        await probeProcess.WaitForExitAsync(cancellationToken);
-
-        return rawOutput
+        return probeResult.StandardOutput
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(static line => line.Split(',')[0].Trim())
             .Where(static line => !string.IsNullOrWhiteSpace(line))
@@ -539,7 +485,7 @@ public class VideoEditorAutomationService
             rangeStartTimestamp);
     }
 
-    private static string BuildExactTrimArguments(
+    private static IReadOnlyList<string> BuildExactTrimArguments(
         string inputPath,
         string outputPath,
         TimeSpan trimStart,
@@ -588,15 +534,21 @@ public class VideoEditorAutomationService
             $"setpts='if(lt(T,{trimStartSeconds}),0,PTS-{startTimestampMicroseconds})'[v]";
 
         return
-            $"-i \"{inputPath}\" " +
-            $"-filter_complex \"{filterComplex}\" " +
-            "-map \"[v]\" " +
-            "-fps_mode passthrough " +
-            "-enc_time_base 1:1000000 " +
-            "-video_track_timescale 1000000 " +
-            "-c:v libx264 -x264-params bframes=0 -preset fast -crf 23 " +
-            "-movflags +faststart -an " +
-            $"-y \"{outputPath}\"";
+        [
+            "-i", inputPath,
+            "-filter_complex", filterComplex,
+            "-map", "[v]",
+            "-fps_mode", "passthrough",
+            "-enc_time_base", "1:1000000",
+            "-video_track_timescale", "1000000",
+            "-c:v", "libx264",
+            "-x264-params", "bframes=0",
+            "-preset", "fast",
+            "-crf", "23",
+            "-movflags", "+faststart",
+            "-an",
+            "-y", outputPath
+        ];
     }
 
     private static string FormatSeconds(double seconds)
@@ -685,20 +637,6 @@ public class VideoEditorAutomationService
                 Path.GetDirectoryName(inputPath) ?? ".",
                 $"{Path.GetFileNameWithoutExtension(inputPath)}_edited{extension}"),
             inputPath);
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
-        }
-        catch
-        {
-        }
     }
 
     private sealed record ExactVideoTrimPlan(

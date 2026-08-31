@@ -23,10 +23,9 @@
 
 #endregion License Information (GPL v3)
 
-using System.Diagnostics;
+using ShareX.VideoEditor.Hosting;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using ShareX.VideoEditor.Hosting;
 
 namespace ShareX.VideoEditor.Core;
 
@@ -39,8 +38,9 @@ namespace ShareX.VideoEditor.Core;
 /// </summary>
 public class VideoExportService
 {
-    private static readonly Regex TimeRegex = new(@"time=(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.Compiled);
-    private static readonly Regex SpeedRegex = new(@"speed=\s*([\d.]+)x", RegexOptions.Compiled);
+    private static readonly Regex DurationRegex = new(
+        @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly string _ffmpegPath;
 
@@ -64,11 +64,11 @@ public class VideoExportService
         ApplyFormatCapabilities(options);
         TimeSpan expectedDuration = options.IsTrimActive && options.TrimEnd > options.TrimStart
             ? options.TrimEnd - options.TrimStart
-            : TimeSpan.Zero;
+            : await ProbeDurationAsync(options.InputPath, cancellationToken);
 
         await ExportTransactionalAsync(
             options.OutputPath,
-            stagingPath => FfmpegArgumentBuilder.Build(options, stagingPath),
+            stagingPath => FfmpegArgumentBuilder.BuildArguments(options, stagingPath),
             expectedDuration,
             null,
             onProgress,
@@ -87,7 +87,8 @@ public class VideoExportService
 
         await ExportTransactionalAsync(
             outputPath,
-            stagingPath => ReplaceTrailingOutputPath(arguments, outputPath, stagingPath),
+            stagingPath => ReplaceTrailingOutputPath(
+                CommandLineArgumentParser.Parse(arguments), outputPath, stagingPath),
             expectedDuration,
             null,
             onProgress,
@@ -96,6 +97,26 @@ public class VideoExportService
 
     internal async Task ExportWithCustomArgumentsAsync(
         Func<string, string> buildArguments,
+        string outputPath,
+        TimeSpan expectedDuration,
+        Action<string>? prepareStagedOutput = null,
+        Action<VideoExportProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(buildArguments);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath, nameof(outputPath));
+
+        await ExportTransactionalAsync(
+            outputPath,
+            stagingPath => CommandLineArgumentParser.Parse(buildArguments(stagingPath)),
+            expectedDuration,
+            prepareStagedOutput,
+            onProgress,
+            cancellationToken);
+    }
+
+    internal async Task ExportWithCustomArgumentsAsync(
+        Func<string, IReadOnlyList<string>> buildArguments,
         string outputPath,
         TimeSpan expectedDuration,
         Action<string>? prepareStagedOutput = null,
@@ -116,7 +137,7 @@ public class VideoExportService
 
     private async Task ExportTransactionalAsync(
         string outputPath,
-        Func<string, string> buildArguments,
+        Func<string, IReadOnlyList<string>> buildArguments,
         TimeSpan expectedDuration,
         Action<string>? prepareStagedOutput,
         Action<VideoExportProgress>? onProgress,
@@ -134,13 +155,22 @@ public class VideoExportService
 
         try
         {
-            string arguments = buildArguments(stagingPath);
-            ArgumentException.ThrowIfNullOrWhiteSpace(arguments, nameof(buildArguments));
+            IReadOnlyList<string> arguments = buildArguments(stagingPath);
+            if (arguments.Count == 0)
+            {
+                throw new InvalidOperationException("FFmpeg arguments cannot be empty.");
+            }
 
             await RunFfmpegAsync(arguments, expectedDuration, onProgress, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             prepareStagedOutput?.Invoke(stagingPath);
             CommitStagedOutput(stagingPath, normalizedOutputPath);
+            onProgress?.Invoke(new VideoExportProgress
+            {
+                ProgressPercent = 100,
+                CurrentTime = expectedDuration,
+                StatusMessage = "Export complete."
+            });
         }
         finally
         {
@@ -149,59 +179,59 @@ public class VideoExportService
     }
 
     private async Task RunFfmpegAsync(
-        string arguments,
+        IReadOnlyList<string> arguments,
         TimeSpan expectedDuration,
         Action<VideoExportProgress>? onProgress,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(arguments, nameof(arguments));
+        ArgumentNullException.ThrowIfNull(arguments);
 
         VideoEditorServices.ReportInformation(nameof(VideoExportService), "Starting FFmpeg export process.");
 
-        var psi = new ProcessStartInfo(_ffmpegPath, arguments)
+        var structuredArguments = new List<string>(arguments.Count + 4)
         {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            "-progress", "pipe:1", "-nostats"
         };
+        structuredArguments.AddRange(arguments);
 
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start FFmpeg process.");
-
-        double totalSeconds = Math.Max(0, expectedDuration.TotalSeconds);
+        var parser = new FfmpegProgressParser(expectedDuration);
         var errorTail = new Queue<string>();
-
-        try
-        {
-            using (cancellationToken.Register(() => TryKillProcess(process)))
+        FfmpegProcessResult result = await FfmpegProcessRunner.RunAsync(
+            _ffmpegPath,
+            structuredArguments,
+            line =>
             {
-                string? line;
-                while ((line = await process.StandardError.ReadLineAsync(cancellationToken)) != null)
+                VideoExportProgress? progress = parser.ParseLine(line);
+                if (progress != null)
                 {
-                    RememberErrorLine(errorTail, line);
-                    var progress = ParseProgressLine(line, totalSeconds);
-                    if (progress != null)
-                    {
-                        onProgress?.Invoke(progress);
-                    }
+                    onProgress?.Invoke(progress);
                 }
+            },
+            line => RememberErrorLine(errorTail, line),
+            cancellationToken: cancellationToken);
 
-                await process.WaitForExitAsync(cancellationToken);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException(FormatFfmpegFailure(process.ExitCode, errorTail));
-            }
-        }
-        catch
+        if (result.ExitCode != 0)
         {
-            TryKillProcess(process);
-            await WaitForExitAfterKillAsync(process);
-            throw;
+            throw new InvalidOperationException(FormatFfmpegFailure(result.ExitCode, errorTail));
         }
+    }
+
+    private async Task<TimeSpan> ProbeDurationAsync(string inputPath, CancellationToken cancellationToken)
+    {
+        FfmpegProcessResult result = await FfmpegProcessRunner.RunAsync(
+            _ffmpegPath,
+            ["-hide_banner", "-i", inputPath],
+            cancellationToken: cancellationToken);
+        Match match = DurationRegex.Match(result.StandardError);
+        if (!match.Success)
+        {
+            return TimeSpan.Zero;
+        }
+
+        double hours = double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        double minutes = double.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+        double seconds = double.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+        return TimeSpan.FromSeconds((hours * 3600) + (minutes * 60) + seconds);
     }
 
     internal static string CreateStagingOutputPath(string outputPath)
@@ -252,6 +282,23 @@ public class VideoExportService
             "Custom FFmpeg arguments must end with the outputPath value so the export can be staged safely.");
     }
 
+    internal static IReadOnlyList<string> ReplaceTrailingOutputPath(
+        IReadOnlyList<string> arguments,
+        string outputPath,
+        string stagingPath)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (arguments.Count == 0 || !string.Equals(arguments[^1], outputPath, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Custom FFmpeg arguments must end with the outputPath value so the export can be staged safely.");
+        }
+
+        var staged = arguments.ToArray();
+        staged[^1] = stagingPath;
+        return staged;
+    }
+
     private static void TryDeleteFile(string path)
     {
         try
@@ -260,31 +307,6 @@ public class VideoExportService
             {
                 File.Delete(path);
             }
-        }
-        catch
-        {
-        }
-    }
-
-    private static void TryKillProcess(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
-        }
-    }
-
-    private static async Task WaitForExitAfterKillAsync(Process process)
-    {
-        try
-        {
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch
         {
@@ -399,42 +421,4 @@ public class VideoExportService
         return $"FFmpeg exited with code {exitCode}. {detail}";
     }
 
-    // ── Progress parsing ─────────────────────────────────────────────────────
-
-    private static VideoExportProgress? ParseProgressLine(string line, double totalSeconds)
-    {
-        // FFmpeg outputs lines like: frame=  420 fps= 90 q=28.0 size=   3456kB time=00:00:14.01 bitrate=2020.5kbits/s speed=2.51x
-        var timeMatch = TimeRegex.Match(line);
-        if (!timeMatch.Success) return null;
-
-        double hours = double.Parse(timeMatch.Groups[1].Value);
-        double minutes = double.Parse(timeMatch.Groups[2].Value);
-        double seconds = double.Parse(timeMatch.Groups[3].Value, CultureInfo.InvariantCulture);
-        double currentSecs = hours * 3600 + minutes * 60 + seconds;
-
-        double percent = totalSeconds > 0
-            ? Math.Min(100, (currentSecs / totalSeconds) * 100)
-            : 0;
-
-        double speed = 0;
-        var speedMatch = SpeedRegex.Match(line);
-        if (speedMatch.Success)
-            double.TryParse(speedMatch.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out speed);
-
-        string eta = speed > 0
-            ? $" — {speed:F1}x"
-            : string.Empty;
-        string elapsed = TimeSpan.FromSeconds(currentSecs)
-            .ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
-
-        return new VideoExportProgress
-        {
-            ProgressPercent = percent,
-            CurrentTime = TimeSpan.FromSeconds(currentSecs),
-            Speed = speed,
-            StatusMessage = totalSeconds > 0
-                ? $"Encoding… {percent:F0}%{eta}"
-                : $"Encoding… {elapsed}{eta}"
-        };
-    }
 }

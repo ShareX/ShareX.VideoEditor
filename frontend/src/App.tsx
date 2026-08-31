@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReceive, useSend } from './hooks/useBridge'
 import type { EditorState, InboundMessage, OutputFormat } from './types/bridge'
+import { createRequestId } from './utils/requestId'
+import { mergeThumbnailBatch, type ThumbnailRequestIdentity } from './utils/thumbnailBatches'
+import { calculateSelectionZoomRange, type TimelineRange } from './utils/timeline'
 import Header from './components/Header'
 import VideoPlayer from './components/VideoPlayer'
 import TransportControls from './components/TransportControls'
@@ -46,6 +49,7 @@ const DEFAULT_STATE: EditorState = {
 }
 
 const MIN_TRIM_SECONDS = 0.1
+const THUMBNAIL_COUNT = 24
 
 function applyTheme(theme: EditorState['theme']) {
   const el = document.documentElement
@@ -58,7 +62,14 @@ function applyTheme(theme: EditorState['theme']) {
 
 export default function App() {
   const [state, setState] = useState<EditorState>(DEFAULT_STATE)
+  const [timelineRange, setTimelineRange] = useState<TimelineRange>({ start: 0, end: 0 })
+  const [isSelectionZoomed, setIsSelectionZoomed] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const activeExportRequestRef = useRef<string | null>(null)
+  const terminalExportRequestRef = useRef<string | null>(null)
+  const exportResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeThumbnailRequestRef = useRef<ThumbnailRequestIdentity | null>(null)
+  const thumbnailRevisionRef = useRef(0)
   const send = useSend()
   const canExport = state.ffmpegAvailable && !state.isExporting
 
@@ -68,9 +79,18 @@ export default function App() {
     switch (msg.type) {
       case 'config':
         applyTheme(msg.theme)
+        activeThumbnailRequestRef.current = null
+        setTimelineRange({ start: 0, end: 0 })
+        setIsSelectionZoomed(false)
         setState(s => ({
           ...s,
           videoUrl: msg.videoUrl,
+          thumbnails: [],
+          duration: 0,
+          position: 0,
+          trimStart: 0,
+          trimEnd: 0,
+          isTrimActive: false,
           theme: msg.theme,
           ffmpegAvailable: msg.ffmpegAvailable,
           ffmpegPath: msg.ffmpegPath ?? '',
@@ -98,11 +118,15 @@ export default function App() {
         }))
         break
 
-      case 'thumbnails':
-        setState(s => ({ ...s, thumbnails: msg.frames }))
+      case 'thumbnailBatch':
+        setState(s => ({
+          ...s,
+          thumbnails: mergeThumbnailBatch(s.thumbnails, activeThumbnailRequestRef.current, msg),
+        }))
         break
 
       case 'exportProgress':
+        if (msg.requestId !== activeExportRequestRef.current) break
         setState(s => ({
           ...s,
           isExporting: true,
@@ -112,22 +136,57 @@ export default function App() {
         break
 
       case 'exportComplete':
+        if (msg.requestId !== activeExportRequestRef.current) break
+        activeExportRequestRef.current = null
+        terminalExportRequestRef.current = msg.requestId
         setState(s => ({
           ...s,
           isExporting: false,
           exportProgress: 100,
           exportStatusMessage: 'Done!',
         }))
-        // Brief display, then reset
-        setTimeout(() => setState(s => ({ ...s, exportProgress: 0, exportStatusMessage: '' })), 2000)
+        if (exportResetTimerRef.current) clearTimeout(exportResetTimerRef.current)
+        exportResetTimerRef.current = setTimeout(() => {
+          if (terminalExportRequestRef.current === msg.requestId && activeExportRequestRef.current === null) {
+            setState(s => ({ ...s, exportProgress: 0, exportStatusMessage: '' }))
+          }
+        }, 2000)
         break
 
       case 'exportCancelled':
+        if (msg.requestId !== activeExportRequestRef.current) break
+        activeExportRequestRef.current = null
+        terminalExportRequestRef.current = msg.requestId
         setState(s => ({ ...s, isExporting: false, exportProgress: 0, exportStatusMessage: 'Cancelled' }))
         break
 
       case 'exportError':
+        if (msg.requestId !== activeExportRequestRef.current) break
+        activeExportRequestRef.current = null
+        terminalExportRequestRef.current = msg.requestId
         setState(s => ({ ...s, isExporting: false, exportProgress: 0, exportStatusMessage: msg.message || 'Export failed' }))
+        break
+
+      case 'bridgeError':
+        if (msg.requestId && msg.requestId === activeExportRequestRef.current) {
+          activeExportRequestRef.current = null
+          terminalExportRequestRef.current = msg.requestId
+          setState(s => ({
+            ...s,
+            isExporting: false,
+            exportProgress: 0,
+            exportStatusMessage: msg.message || 'The editor host rejected the export request.',
+          }))
+        } else if (msg.requestId && msg.requestId === activeThumbnailRequestRef.current?.requestId) {
+          activeThumbnailRequestRef.current = null
+          setState(s => ({
+            ...s,
+            thumbnails: [],
+            exportStatusMessage: `Thumbnails unavailable: ${msg.message}`,
+          }))
+        } else {
+          setState(s => ({ ...s, exportStatusMessage: msg.message || 'The editor host rejected a request.' }))
+        }
         break
     }
   }, [])
@@ -137,8 +196,12 @@ export default function App() {
   // ── Tell C# we're ready once mounted ───────────────────────────────────────
 
   useEffect(() => {
-    send({ type: 'ready' })
+    send({ type: 'ready', protocolVersion: 2 })
   }, [send])
+
+  useEffect(() => () => {
+    if (exportResetTimerRef.current) clearTimeout(exportResetTimerRef.current)
+  }, [])
 
   // ── Sync video element duration once loaded ─────────────────────────────────
 
@@ -150,7 +213,36 @@ export default function App() {
       duration: vid.duration,
       trimEnd: s.trimEnd === 0 ? vid.duration : s.trimEnd,
     }))
-  }, [])
+    if (!isSelectionZoomed) {
+      setTimelineRange({ start: 0, end: vid.duration })
+    }
+  }, [isSelectionZoomed])
+
+  // ── Progressive thumbnails for the currently visible timeline range ───────
+
+  useEffect(() => {
+    if (!state.videoUrl || state.duration <= 0 || timelineRange.end <= timelineRange.start) return
+
+    thumbnailRevisionRef.current += 1
+    const requestId = createRequestId()
+    const revision = thumbnailRevisionRef.current
+    activeThumbnailRequestRef.current = { requestId, revision }
+    setState(s => ({ ...s, thumbnails: Array<string | null>(THUMBNAIL_COUNT).fill(null) }))
+
+    const delivered = send({
+      type: 'requestThumbnails',
+      requestId,
+      revision,
+      startTime: timelineRange.start,
+      endTime: timelineRange.end,
+      count: THUMBNAIL_COUNT,
+    })
+
+    if (!delivered && activeThumbnailRequestRef.current?.requestId === requestId) {
+      activeThumbnailRequestRef.current = null
+      setState(s => ({ ...s, thumbnails: [] }))
+    }
+  }, [send, state.duration, state.videoUrl, timelineRange.end, timelineRange.start])
 
   const onVideoTimeUpdate = useCallback(() => {
     const vid = videoRef.current
@@ -264,8 +356,12 @@ export default function App() {
       return
     }
 
+    const requestId = createRequestId()
+    activeExportRequestRef.current = requestId
+    terminalExportRequestRef.current = null
     const delivered = send({
       type: 'requestExport',
+      requestId,
       isTrimActive: state.isTrimActive,
       trimStart: state.trimStart,
       trimEnd: state.trimEnd,
@@ -281,6 +377,9 @@ export default function App() {
       watermarkText: state.watermarkText,
       watermarkImagePath: state.watermarkImagePath,
     })
+    if (!delivered && activeExportRequestRef.current === requestId) {
+      activeExportRequestRef.current = null
+    }
     setState(s => ({
       ...s,
       isExporting: delivered,
@@ -290,8 +389,38 @@ export default function App() {
   }, [send, state])
 
   const cancelExport = useCallback(() => {
-    send({ type: 'cancelExport' })
+    const requestId = activeExportRequestRef.current
+    if (requestId) send({ type: 'cancelExport', requestId })
   }, [send])
+
+  const zoomToSelection = useCallback(() => {
+    if (!state.isTrimActive) return
+    const nextRange = calculateSelectionZoomRange(state.duration, state.trimStart, state.trimEnd)
+    if (nextRange.start === timelineRange.start && nextRange.end === timelineRange.end) {
+      setIsSelectionZoomed(nextRange.start > 0 || nextRange.end < state.duration)
+      return
+    }
+
+    activeThumbnailRequestRef.current = null
+    setTimelineRange(nextRange)
+    setIsSelectionZoomed(nextRange.start > 0 || nextRange.end < state.duration)
+  }, [state.duration, state.isTrimActive, state.trimEnd, state.trimStart, timelineRange.end, timelineRange.start])
+
+  const resetTimelineZoom = useCallback(() => {
+    if (timelineRange.start === 0 && timelineRange.end === state.duration) {
+      setIsSelectionZoomed(false)
+      return
+    }
+
+    activeThumbnailRequestRef.current = null
+    setTimelineRange({ start: 0, end: state.duration })
+    setIsSelectionZoomed(false)
+  }, [state.duration, timelineRange.end, timelineRange.start])
+
+  const resetTrim = useCallback(() => {
+    setState(s => ({ ...s, isTrimActive: false, trimStart: 0, trimEnd: s.duration }))
+    resetTimelineZoom()
+  }, [resetTimelineZoom])
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
 
@@ -381,12 +510,17 @@ export default function App() {
             trimEnd={state.trimEnd}
             isTrimActive={state.isTrimActive}
             thumbnails={state.thumbnails}
+            viewStart={timelineRange.start}
+            viewEnd={timelineRange.end || state.duration}
+            isSelectionZoomed={isSelectionZoomed}
             onSeek={seekTo}
             onTrimStartChange={setTrimStart}
             onTrimEndChange={setTrimEnd}
             onSetTrimStart={() => setTrimStart(state.position)}
             onSetTrimEnd={() => setTrimEnd(state.position)}
-            onResetTrim={() => setState(s => ({ ...s, isTrimActive: false, trimStart: 0, trimEnd: s.duration }))}
+            onResetTrim={resetTrim}
+            onZoomToSelection={zoomToSelection}
+            onResetZoom={resetTimelineZoom}
           />
         </div>
 

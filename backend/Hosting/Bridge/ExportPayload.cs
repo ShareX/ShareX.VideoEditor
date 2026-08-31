@@ -33,6 +33,9 @@ namespace ShareX.VideoEditor.Hosting.Bridge;
 /// </summary>
 internal sealed class ExportPayload
 {
+    [JsonProperty("requestId")]
+    public string RequestId { get; set; } = string.Empty;
+
     // ── Trim ─────────────────────────────────────────────────────────────────
 
     [JsonProperty("isTrimActive")]

@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { InboundMessage, OutboundMessage } from '../types/bridge'
+import { parseInboundMessage } from '../types/bridgeValidation'
 
 /**
  * Thin wrapper around the Photino.NET web-message bridge.
@@ -36,11 +37,11 @@ export function useSend() {
 export function useReceive(handler: (msg: InboundMessage) => void) {
   useEffect(() => {
     const onMessage = (raw: string) => {
-      try {
-        const msg = JSON.parse(raw) as InboundMessage
+      const msg = parseInboundMessage(raw)
+      if (msg) {
         handler(msg)
-      } catch (e) {
-        console.error('[Bridge] Failed to parse message:', raw, e)
+      } else {
+        console.error('[Bridge] Rejected an invalid native message')
       }
     }
 

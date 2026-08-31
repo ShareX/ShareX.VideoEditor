@@ -37,6 +37,7 @@ export interface RuntimeDiagnosticsSnapshot {
 
 export interface ConfigMessage {
   type: 'config'
+  protocolVersion: 2
   videoUrl: string
   theme: 'Dark' | 'Light' | 'System'
   culture: string
@@ -57,49 +58,67 @@ export interface WatermarkImageSelectedMessage {
   imageUrl: string
 }
 
-export interface ThumbnailsMessage {
-  type: 'thumbnails'
-  /** Array of data:image/jpeg;base64,… URIs */
+export interface ThumbnailBatchMessage {
+  type: 'thumbnailBatch'
+  requestId: string
+  revision: number
+  startIndex: number
+  totalCount: number
+  /** Progressive batch of data:image/jpeg;base64,… URIs. */
   frames: string[]
+  isComplete: boolean
 }
 
 export interface ExportProgressMessage {
   type: 'exportProgress'
+  requestId: string
   percent: number
   message: string
 }
 
 export interface ExportCompleteMessage {
   type: 'exportComplete'
+  requestId: string
   outputPath: string
 }
 
 export interface ExportCancelledMessage {
   type: 'exportCancelled'
+  requestId: string
 }
 
 export interface ExportErrorMessage {
   type: 'exportError'
+  requestId: string
+  message: string
+}
+
+export interface BridgeErrorMessage {
+  type: 'bridgeError'
+  requestId?: string
   message: string
 }
 
 export type InboundMessage =
   | ConfigMessage
-  | ThumbnailsMessage
+  | ThumbnailBatchMessage
   | ExportProgressMessage
   | ExportCompleteMessage
   | ExportCancelledMessage
   | ExportErrorMessage
+  | BridgeErrorMessage
   | WatermarkImageSelectedMessage
 
 // ── Messages sent TO C# ───────────────────────────────────────────────────────
 
 export interface ReadyMessage {
   type: 'ready'
+  protocolVersion: 2
 }
 
 export interface RequestExportMessage {
   type: 'requestExport'
+  requestId: string
   isTrimActive: boolean
   trimStart: number
   trimEnd: number
@@ -122,9 +141,24 @@ export interface RequestWatermarkImageMessage {
 
 export interface CancelExportMessage {
   type: 'cancelExport'
+  requestId: string
 }
 
-export type OutboundMessage = ReadyMessage | RequestExportMessage | CancelExportMessage | RequestWatermarkImageMessage
+export interface RequestThumbnailsMessage {
+  type: 'requestThumbnails'
+  requestId: string
+  revision: number
+  startTime: number
+  endTime: number
+  count: number
+}
+
+export type OutboundMessage =
+  | ReadyMessage
+  | RequestExportMessage
+  | CancelExportMessage
+  | RequestWatermarkImageMessage
+  | RequestThumbnailsMessage
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 
@@ -141,7 +175,7 @@ export interface EditorState {
   watermarkConfig: WatermarkConfig | null
   theme: ConfigMessage['theme']
   // Thumbnails
-  thumbnails: string[]
+  thumbnails: Array<string | null>
   // Playback
   duration: number      // seconds
   position: number      // seconds

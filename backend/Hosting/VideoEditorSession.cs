@@ -46,10 +46,15 @@ internal sealed class VideoEditorSession
     private readonly bool _ffmpegAvailable;
     private readonly string _ffprobePath;
     private readonly bool _ffprobeAvailable;
+    private readonly object _operationGate = new();
+    private readonly HashSet<string> _selectedWatermarkPaths = new(StringComparer.OrdinalIgnoreCase);
 
     private PhotinoWindow? _window;
     private CancellationTokenSource? _exportCts;
     private CancellationTokenSource? _thumbnailCts;
+    private string? _activeExportRequestId;
+    private string? _activeThumbnailRequestId;
+    private int _activeThumbnailRevision;
 
     public VideoEditorSession(VideoEditorOptions options, VideoEditorEvents? events)
     {
@@ -194,33 +199,43 @@ internal sealed class VideoEditorSession
     {
         try
         {
-            var obj = JObject.Parse(message);
-            string? type = obj["type"]?.Value<string>();
+            BridgeMessageValidationResult validation = BridgeMessageValidator.Validate(message);
+            if (!validation.IsValid || validation.Message == null)
+            {
+                SendBridgeError(validation.RequestId, validation.Error ?? "Invalid bridge message.");
+                return;
+            }
 
-            switch (type)
+            JObject obj = validation.Message;
+
+            switch (validation.Type)
             {
                 case "ready":
                     SendConfig();
-                    StartThumbnailExtraction();
                     break;
 
                 case "requestExport":
-                    var payload = obj.ToObject<ExportPayload>() ?? new ExportPayload();
+                    var payload = obj.ToObject<ExportPayload>()!;
                     HandleExportRequest(payload);
                     break;
 
+                case "requestThumbnails":
+                    StartThumbnailExtraction(obj.ToObject<ThumbnailRequestPayload>()!);
+                    break;
+
                 case "requestWatermarkImage":
-                    HandleWatermarkImageRequest();
+                    HandleWatermarkImageRequest(validation.RequestId);
                     break;
 
                 case "cancelExport":
-                    _exportCts?.Cancel();
+                    CancelExport(validation.RequestId!);
                     break;
             }
         }
         catch (Exception ex)
         {
             VideoEditorServices.ReportError(nameof(VideoEditorSession), "Error processing bridge message.", ex);
+            SendBridgeError(null, "Bridge message processing failed.");
         }
     }
 
@@ -233,6 +248,18 @@ internal sealed class VideoEditorSession
         catch (Exception ex)
         {
             VideoEditorServices.ReportWarning(nameof(VideoEditorSession), "Failed to send bridge message.", ex);
+        }
+    }
+
+    private void SendBridgeError(string? requestId, string message)
+    {
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            Send(new { type = "bridgeError", message });
+        }
+        else
+        {
+            Send(new { type = "bridgeError", requestId, message });
         }
     }
 
@@ -274,6 +301,7 @@ internal sealed class VideoEditorSession
         Send(new
         {
             type = "config",
+            protocolVersion = 2,
             videoUrl,
             theme = _options.Theme,
             culture = _options.Culture ?? string.Empty,
@@ -298,35 +326,69 @@ internal sealed class VideoEditorSession
         });
     }
 
-    private void StartThumbnailExtraction()
+    private void StartThumbnailExtraction(ThumbnailRequestPayload payload)
     {
         if (!_ffmpegAvailable)
         {
             VideoEditorServices.ReportWarning(nameof(VideoEditorSession),
                 "FFmpegPath is not set or does not exist — thumbnails will not be generated.");
+            SendBridgeError(payload.RequestId, "FFmpeg is not available for thumbnail extraction.");
             return;
         }
 
-        _thumbnailCts?.Cancel();
-        _thumbnailCts = new CancellationTokenSource();
-        var token = _thumbnailCts.Token;
+        CancellationTokenSource thumbnailCts;
+        lock (_operationGate)
+        {
+            _thumbnailCts?.Cancel();
+            _thumbnailCts?.Dispose();
+            _thumbnailCts = new CancellationTokenSource();
+            thumbnailCts = _thumbnailCts;
+            _activeThumbnailRequestId = payload.RequestId;
+            _activeThumbnailRevision = payload.Revision;
+        }
+
+        CancellationToken token = thumbnailCts.Token;
 
         _ = Task.Run(async () =>
         {
             try
             {
                 var extractor = new ThumbnailExtractor(_ffmpegPath);
-                var frames = await extractor.ExtractThumbnailsAsync(
-                    _options.VideoPath, count: 24, cancellationToken: token);
-
-                Send(new { type = "thumbnails", frames });
+                _ = await extractor.ExtractThumbnailBatchesAsync(
+                    _options.VideoPath,
+                    payload.StartTime,
+                    payload.EndTime,
+                    payload.Count,
+                    96,
+                    54,
+                    batch =>
+                    {
+                        if (IsActiveThumbnailRequest(payload.RequestId, payload.Revision, thumbnailCts))
+                        {
+                            Send(new
+                            {
+                                type = "thumbnailBatch",
+                                requestId = payload.RequestId,
+                                revision = payload.Revision,
+                                startIndex = batch.StartIndex,
+                                totalCount = payload.Count,
+                                frames = batch.Frames,
+                                isComplete = batch.IsComplete
+                            });
+                        }
+                    },
+                    token);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 VideoEditorServices.ReportWarning(nameof(VideoEditorSession), "Thumbnail extraction failed.", ex);
+                if (IsActiveThumbnailRequest(payload.RequestId, payload.Revision, thumbnailCts))
+                {
+                    SendBridgeError(payload.RequestId, ex.Message);
+                }
             }
-        }, token);
+        }, CancellationToken.None);
     }
 
     private void HandleExportRequest(ExportPayload payload)
@@ -335,20 +397,63 @@ internal sealed class VideoEditorSession
         {
             VideoEditorServices.ReportWarning(nameof(VideoEditorSession),
                 "Export requested without an available FFmpeg path.");
-            Send(new { type = "exportError", message = "FFmpeg is not available." });
+            Send(new { type = "exportError", requestId = payload.RequestId, message = "FFmpeg is not available." });
             return;
         }
 
-        string? outputPath = ResolveExportOutputPath(payload);
+        if (!IsAllowedWatermarkPath(payload.WatermarkImagePath))
+        {
+            Send(new
+            {
+                type = "exportError",
+                requestId = payload.RequestId,
+                message = "Watermark image path was not selected by this editor session."
+            });
+            return;
+        }
+
+        lock (_operationGate)
+        {
+            if (_activeExportRequestId != null)
+            {
+                Send(new
+                {
+                    type = "exportError",
+                    requestId = payload.RequestId,
+                    message = "Another export is already in progress."
+                });
+                return;
+            }
+
+            _activeExportRequestId = payload.RequestId;
+        }
+
+        string? outputPath;
+        try
+        {
+            outputPath = ResolveExportOutputPath(payload);
+        }
+        catch (Exception ex)
+        {
+            ClearActiveExport(payload.RequestId);
+            VideoEditorServices.ReportError(nameof(VideoEditorSession), "Failed to select export destination.", ex);
+            Send(new { type = "exportError", requestId = payload.RequestId, message = ex.Message });
+            return;
+        }
         if (string.IsNullOrWhiteSpace(outputPath))
         {
-            Send(new { type = "exportCancelled" });
+            Send(new { type = "exportCancelled", requestId = payload.RequestId });
+            ClearActiveExport(payload.RequestId);
             return;
         }
 
-        _exportCts?.Cancel();
-        _exportCts = new CancellationTokenSource();
-        var token = _exportCts.Token;
+        var exportCts = new CancellationTokenSource();
+        lock (_operationGate)
+        {
+            _exportCts?.Dispose();
+            _exportCts = exportCts;
+        }
+        CancellationToken token = exportCts.Token;
 
         _ = Task.Run(async () =>
         {
@@ -362,12 +467,14 @@ internal sealed class VideoEditorSession
                     progress => Send(new
                     {
                         type = "exportProgress",
+                        requestId = payload.RequestId,
                         percent = progress.ProgressPercent,
                         message = progress.StatusMessage
                     }),
                     token);
 
-                Send(new { type = "exportComplete", outputPath });
+                ClearActiveExport(payload.RequestId);
+                Send(new { type = "exportComplete", requestId = payload.RequestId, outputPath });
                 try { _events?.ExportCompleted?.Invoke(outputPath); } catch { }
 
                 if (_options.CloseAfterExport)
@@ -377,15 +484,22 @@ internal sealed class VideoEditorSession
             }
             catch (OperationCanceledException)
             {
-                Send(new { type = "exportCancelled" });
+                ClearActiveExport(payload.RequestId);
+                Send(new { type = "exportCancelled", requestId = payload.RequestId });
             }
             catch (Exception ex)
             {
+                ClearActiveExport(payload.RequestId);
                 VideoEditorServices.ReportError(nameof(VideoEditorSession), "Export failed.", ex);
-                Send(new { type = "exportError", message = ex.Message });
+                Send(new { type = "exportError", requestId = payload.RequestId, message = ex.Message });
                 try { _events?.ExportFailed?.Invoke(ex); } catch { }
             }
-        }, token);
+            finally
+            {
+                ClearActiveExport(payload.RequestId);
+                exportCts.Dispose();
+            }
+        }, CancellationToken.None);
     }
 
     private string? ResolveExportOutputPath(ExportPayload payload)
@@ -417,7 +531,7 @@ internal sealed class VideoEditorSession
             [(payload.OutputFormat + " File", new[] { "*." + ext })]);
     }
 
-    private void HandleWatermarkImageRequest()
+    private void HandleWatermarkImageRequest(string? requestId)
     {
         string[]? selected = _window?.ShowOpenFile(
             "Select watermark image",
@@ -428,16 +542,111 @@ internal sealed class VideoEditorSession
         string? path = selected is { Length: > 0 } ? selected[0] : null;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            Send(new { type = "watermarkImageSelected", path = string.Empty, imageUrl = string.Empty });
+            Send(new { type = "watermarkImageSelected", requestId, path = string.Empty, imageUrl = string.Empty });
             return;
+        }
+
+        lock (_operationGate)
+        {
+            _selectedWatermarkPaths.Add(Path.GetFullPath(path));
         }
 
         Send(new
         {
             type = "watermarkImageSelected",
+            requestId,
             path,
             imageUrl = ToFileUrl(path)
         });
+    }
+
+    private void CancelExport(string requestId)
+    {
+        CancellationTokenSource? exportCts;
+        lock (_operationGate)
+        {
+            if (!string.Equals(_activeExportRequestId, requestId, StringComparison.Ordinal))
+            {
+                Send(new
+                {
+                    type = "exportError",
+                    requestId,
+                    message = "No active export matches this requestId."
+                });
+                return;
+            }
+
+            exportCts = _exportCts;
+        }
+
+        exportCts?.Cancel();
+    }
+
+    private void ClearActiveExport(string requestId)
+    {
+        lock (_operationGate)
+        {
+            if (string.Equals(_activeExportRequestId, requestId, StringComparison.Ordinal))
+            {
+                _activeExportRequestId = null;
+                _exportCts = null;
+            }
+        }
+    }
+
+    private bool IsActiveThumbnailRequest(
+        string requestId,
+        int revision,
+        CancellationTokenSource thumbnailCts)
+    {
+        lock (_operationGate)
+        {
+            return ReferenceEquals(_thumbnailCts, thumbnailCts) &&
+                   !thumbnailCts.IsCancellationRequested &&
+                   string.Equals(_activeThumbnailRequestId, requestId, StringComparison.Ordinal) &&
+                   _activeThumbnailRevision == revision;
+        }
+    }
+
+    private bool IsAllowedWatermarkPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return true;
+        }
+
+        string normalized;
+        try
+        {
+            normalized = Path.GetFullPath(path);
+        }
+        catch
+        {
+            return false;
+        }
+
+        string? configuredPath = _options.WatermarkSettings?.ImagePath;
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            try
+            {
+                if (string.Equals(
+                    normalized,
+                    Path.GetFullPath(configuredPath),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                {
+                    return File.Exists(normalized);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        lock (_operationGate)
+        {
+            return File.Exists(normalized) && _selectedWatermarkPaths.Contains(normalized);
+        }
     }
 
     private VideoExportOptions BuildExportOptions(ExportPayload payload, string outputPath)

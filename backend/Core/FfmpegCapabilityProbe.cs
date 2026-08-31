@@ -24,7 +24,6 @@
 #endregion License Information (GPL v3)
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace ShareX.VideoEditor.Core;
 
@@ -119,34 +118,11 @@ public static class FfmpegCapabilityProbe
 
         try
         {
-            var startInfo = new ProcessStartInfo(ffmpegPath, "-hide_banner -encoders")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using Process? process = Process.Start(startInfo);
-            if (process == null)
-            {
-                return new FfmpegCapabilitySnapshot();
-            }
-
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-
-            if (!process.WaitForExit(8000))
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                try { process.WaitForExit(2000); } catch { }
-                return new FfmpegCapabilitySnapshot();
-            }
-
-            Task.WaitAll([stdoutTask, stderrTask], TimeSpan.FromSeconds(2));
-            string stdout = stdoutTask.IsCompletedSuccessfully ? stdoutTask.Result : string.Empty;
-            string stderr = stderrTask.IsCompletedSuccessfully ? stderrTask.Result : string.Empty;
-            return ParseEncoderList(stdout + Environment.NewLine + stderr);
+            FfmpegProcessResult result = FfmpegProcessRunner.RunAsync(
+                ffmpegPath,
+                ["-hide_banner", "-encoders"],
+                timeout: TimeSpan.FromSeconds(8)).GetAwaiter().GetResult();
+            return ParseEncoderList(result.StandardOutput + Environment.NewLine + result.StandardError);
         }
         catch
         {

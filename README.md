@@ -4,6 +4,8 @@ Cross-platform video editor library for ShareX. Provides trimming, cropping, for
 
 Exports are transactional: FFmpeg writes to a unique sibling staging file and the destination is replaced only after a successful encode. Cancellation and failure preserve any existing destination, and exporting over the source video is rejected.
 
+FFmpeg and FFprobe are launched without shell command parsing through structured argument lists. Their output streams are drained concurrently, cancellation terminates the complete process tree, and export progress uses FFmpeg's machine-readable progress protocol. The native/Web UI bridge is protocol-versioned, validates messages at runtime, and correlates export and thumbnail work so stale responses cannot mutate newer operations.
+
 ## Requirements
 
 - .NET 10
@@ -21,6 +23,10 @@ dotnet build ShareX.VideoEditor.sln -p:BuildWebUI=false
 
 # Run backend regression tests
 dotnet test tests/ShareX.VideoEditor.Tests.csproj
+
+# Run frontend unit and component tests
+cd frontend
+npm test
 ```
 
 ## Editing shortcuts
@@ -33,6 +39,8 @@ dotnet test tests/ShareX.VideoEditor.Tests.csproj
 - `Ctrl+S` or `Ctrl+E`: export
 
 When a trim is active, playback and seeking stay inside its in/out range. Crop state remains applied after leaving crop-edit mode until **Reset Crop** is selected.
+
+Use **Zoom to selection** to expand the active trim range while retaining context on each side. **Show full timeline** restores the complete recording. Thumbnail requests follow the visible range and arrive progressively in fixed timeline slots.
 
 ## Layout
 

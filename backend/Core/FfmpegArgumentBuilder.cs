@@ -36,6 +36,29 @@ public static class FfmpegArgumentBuilder
 {
     public static string Build(VideoExportOptions opts, string? outputPath = null)
     {
+        IReadOnlyList<string> arguments = BuildArguments(opts, outputPath);
+        var rendered = new List<string>(arguments.Count);
+
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            string argument = arguments[i];
+            bool isPathOrFilter = i == arguments.Count - 1 ||
+                (i > 0 && arguments[i - 1] is "-i" or "-vf" or "-filter_complex");
+            rendered.Add(isPathOrFilter || argument.Any(char.IsWhiteSpace)
+                ? Quote(argument.Replace("\"", "\\\"", StringComparison.Ordinal))
+                : argument);
+        }
+
+        return string.Join(' ', rendered);
+    }
+
+    /// <summary>
+    /// Builds discrete FFmpeg arguments so callers can use
+    /// <see cref="System.Diagnostics.ProcessStartInfo.ArgumentList"/> without
+    /// platform-specific command-line parsing.
+    /// </summary>
+    public static IReadOnlyList<string> BuildArguments(VideoExportOptions opts, string? outputPath = null)
+    {
         ArgumentNullException.ThrowIfNull(opts);
 
         bool hasImageWatermark = TryResolveImageWatermarkPath(opts, out string? imagePath);
@@ -44,17 +67,16 @@ public static class FfmpegArgumentBuilder
         bool isGif = string.Equals(opts.OutputFormat, "GIF", StringComparison.OrdinalIgnoreCase);
         bool isAudioLess = isGif || string.Equals(opts.OutputFormat, "WEBP", StringComparison.OrdinalIgnoreCase);
 
-        var sb = new StringBuilder();
-        AppendInputs(sb, opts, hasImageWatermark ? imagePath : null);
+        var arguments = new List<string>();
+        AppendInputs(arguments, opts, hasImageWatermark ? imagePath : null);
 
         if (hasImageWatermark)
         {
             string graph = BuildOverlayFilterGraph(preprocess, opts, drawText, isGif);
-            sb.Append("-filter_complex ").Append(Quote(graph)).Append(' ');
-            sb.Append("-map [vout] ");
+            arguments.AddRange(["-filter_complex", graph, "-map", "[vout]"]);
             if (!isAudioLess)
             {
-                sb.Append("-map 0:a? ");
+                arguments.AddRange(["-map", "0:a?"]);
             }
         }
         else
@@ -72,13 +94,14 @@ public static class FfmpegArgumentBuilder
 
             if (filters.Count > 0)
             {
-                sb.Append("-vf ").Append(Quote(string.Join(",", filters))).Append(' ');
+                arguments.AddRange(["-vf", string.Join(",", filters)]);
             }
         }
 
-        AppendOutputCodec(sb, opts);
-        sb.Append("-y ").Append(Quote(outputPath ?? opts.OutputPath));
-        return sb.ToString();
+        AppendOutputCodec(arguments, opts);
+        arguments.Add("-y");
+        arguments.Add(outputPath ?? opts.OutputPath);
+        return arguments;
     }
 
     public static bool TryResolveImageWatermarkPath(VideoExportOptions opts, out string? imagePath)
@@ -114,23 +137,23 @@ public static class FfmpegArgumentBuilder
         return width > 0 && height > 0;
     }
 
-    private static void AppendInputs(StringBuilder sb, VideoExportOptions opts, string? imagePath)
+    private static void AppendInputs(List<string> arguments, VideoExportOptions opts, string? imagePath)
     {
         if (opts.IsTrimActive)
         {
-            sb.Append("-ss ").Append(FormatTimestamp(opts.TrimStart)).Append(' ');
+            arguments.AddRange(["-ss", FormatTimestamp(opts.TrimStart)]);
         }
 
-        sb.Append("-i ").Append(Quote(opts.InputPath)).Append(' ');
+        arguments.AddRange(["-i", opts.InputPath]);
 
         if (!string.IsNullOrWhiteSpace(imagePath))
         {
-            sb.Append("-i ").Append(Quote(imagePath)).Append(' ');
+            arguments.AddRange(["-i", imagePath]);
         }
 
         if (opts.IsTrimActive)
         {
-            sb.Append("-t ").Append(FormatTimestamp(opts.TrimEnd - opts.TrimStart)).Append(' ');
+            arguments.AddRange(["-t", FormatTimestamp(opts.TrimEnd - opts.TrimStart)]);
         }
     }
 
@@ -221,7 +244,7 @@ public static class FfmpegArgumentBuilder
         return null;
     }
 
-    private static void AppendOutputCodec(StringBuilder sb, VideoExportOptions opts)
+    private static void AppendOutputCodec(List<string> arguments, VideoExportOptions opts)
     {
         switch (opts.OutputFormat.ToUpperInvariant())
         {
@@ -229,20 +252,20 @@ public static class FfmpegArgumentBuilder
                 string webmCodec = string.Equals(opts.VideoCodec, "libvpx", StringComparison.OrdinalIgnoreCase)
                     ? "libvpx"
                     : "libvpx-vp9";
-                sb.Append("-c:v ").Append(webmCodec).Append(" -crf 33 -b:v 0 -c:a libopus ");
+                arguments.AddRange(["-c:v", webmCodec, "-crf", "33", "-b:v", "0", "-c:a", "libopus"]);
                 break;
 
             case "GIF":
-                sb.Append("-loop 0 -an ");
+                arguments.AddRange(["-loop", "0", "-an"]);
                 break;
 
             case "WEBP":
-                sb.Append("-c:v libwebp_anim -loop 0 -lossless 0 -quality 80 -an ");
+                arguments.AddRange(["-c:v", "libwebp_anim", "-loop", "0", "-lossless", "0", "-quality", "80", "-an"]);
                 break;
 
             case "MP4":
             default:
-                sb.Append("-c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -movflags +faststart ");
+                arguments.AddRange(["-c:v", "libx264", "-preset", "fast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]);
                 break;
         }
     }
